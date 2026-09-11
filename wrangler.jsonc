@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ksfh-meeting",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "GOOGLE_SHEET_ID": "13GLxkHcDU24hf69uGHrw_bX_hWBOyQU3LdTYRdY3BQg",
+    "GOOGLE_SHEET_NAME": "Bookings",
+    "GOOGLE_CALENDAR_ID": "9687a0a6bcc63c3544547b42b7a51212b8092b61aa94fffba4c5b3f6b8a8bd31@group.calendar.google.com",
+    "ADMIN_EMAILS": "komchay8@gmail.com"
+  }
+}
