@@ -31,7 +31,7 @@ function loadGoogle() {
   return googleLoader;
 }
 
-export function GoogleLogin({ onSignedIn }: { onSignedIn: (email: string) => void }) {
+export function GoogleLogin({ onSignedIn, notice = '' }: { onSignedIn: (email: string) => void; notice?: string }) {
   const button = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -59,7 +59,7 @@ export function GoogleLogin({ onSignedIn }: { onSignedIn: (email: string) => voi
           finally { if (active) setBusy(false); }
         } });
         button.current.replaceChildren();
-        google.renderButton(button.current, { theme: 'outline', size: 'large', text: 'signin_with', width: 280 });
+        google.renderButton(button.current, { theme: 'outline', size: 'large', text: 'signin_with', width: Math.max(200, Math.min(320, button.current.clientWidth)) });
         setReady(true);
       } catch (error) { if (active) setMessage(error instanceof Error ? error.message : 'មិនអាច Login បាន'); }
     }
@@ -68,14 +68,16 @@ export function GoogleLogin({ onSignedIn }: { onSignedIn: (email: string) => voi
   }, [attempt, onSignedIn]);
 
   return <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">
-    <section className="w-full max-w-md rounded-2xl border bg-white p-7 text-center shadow-sm">
+    <section className="w-full max-w-md rounded-2xl border bg-white p-5 sm:p-7 text-center shadow-sm">
       <p className="text-sm font-semibold text-emerald-700">KSFH Meeting</p>
       <h1 className="mt-3 text-2xl font-bold">ចូលផ្ទាំងគ្រប់គ្រង</h1>
-      <p className="mt-3 text-sm leading-6 text-slate-600">សូមចូលដោយប្រើគណនី Google ដែលមានសិទ្ធិគ្រប់គ្រង។</p>
+      <p className="mt-3 text-sm leading-6 text-slate-600">សូមប្រើគណនី Google ដែលម្ចាស់ប្រព័ន្ធបានផ្តល់សិទ្ធិ។ អ្នកនឹងឃើញមុខងារតាមសិទ្ធិរបស់អ្នក។</p>
+      {notice && <output className="mt-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">{notice}</output>}
       <div ref={button} className={`mt-6 flex justify-center ${busy ? 'pointer-events-none opacity-50' : ''}`} />
       {!ready && !message && <p className="mt-4 text-sm text-slate-500">កំពុងបើក Google Login…</p>}
       {busy && <output className="mt-4 block text-sm text-slate-500">កំពុងផ្ទៀងផ្ទាត់គណនី…</output>}
       {message && <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{message}<div className="mt-3"><Button variant="outline" disabled={busy} onClick={() => { setMessage(''); setReady(false); setAttempt((value) => value + 1); }}>ព្យាយាមម្ដងទៀត</Button></div></div>}
+      <div className="mt-6 rounded-xl bg-slate-50 p-4 text-left text-sm leading-6"><p className="font-semibold">មិនទាន់មានសិទ្ធិចូល?</p><p className="mt-1 text-slate-600">ទាក់ទងម្ចាស់ប្រព័ន្ធ ដើម្បីបន្ថែម Google Email របស់អ្នក។ មិនចាំបាច់បង្កើត Password ថ្មីទេ។</p><p className="mt-2 text-slate-600">សម្រាប់ស្នើសុំបន្ទប់ អ្នកអាចប្រើ Form ខាងក្រោម ដោយមិនចាំបាច់ Login។</p></div>
       <Link href="/request" className="mt-7 inline-block text-sm text-emerald-700 underline">បើក Form ស្នើសុំបន្ទប់</Link>
     </section>
   </main>;

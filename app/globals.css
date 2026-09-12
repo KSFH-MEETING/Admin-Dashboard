@@ -65,3 +65,12 @@
   .safe-bottom { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
   .surface-shadow { box-shadow: 0 18px 55px rgba(16, 80, 59, .10); }
 }
+
+@media print {
+  @page { size: landscape; margin: 12mm; }
+  body, main { background: white !important; }
+  table { font-size: 10px; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  button { color: inherit; }
+}

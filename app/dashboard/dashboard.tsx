@@ -1,11 +1,13 @@
 'use client';
 
+import { Modal } from './modal';
+import { ReportsPanel } from './reports-panel';
 import { UsersPanel } from './users-panel';
 import { userCan, type DashboardUser } from '@/lib/server/user-policy';
 import { GoogleLogin } from './google-login';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CalendarCheck, CalendarDays, CircleAlert, Clock3, ExternalLink, LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2, UsersRound, X } from 'lucide-react';
+import { CalendarCheck, CalendarDays, CircleAlert, Clock3, ExternalLink, LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +68,7 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
 
   async function save(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
     setSaving(true); setError('');
     const data = new FormData(event.currentTarget);
     const payload = {
@@ -84,13 +87,9 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
   }
 
   return (
-    <dialog open className="fixed inset-0 z-50 m-0 h-full max-h-none w-full max-w-none bg-slate-950/25 p-0 backdrop-blur-sm">
-      <div className="absolute inset-y-0 right-0 w-full max-w-xl overflow-y-auto bg-white shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white/95 px-5 py-4 backdrop-blur">
-          <div><h2 className="font-bold">កែប្រែការកក់</h2><p className="text-xs text-slate-500">{booking.bookingId}</p></div>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="បិទ"><X /></Button>
-        </div>
-        <form onSubmit={save} className="grid gap-4 p-5">
+    <Modal title="✏️ កែប្រែការកក់" onClose={onClose} busy={saving}>
+      <p className="px-5 pt-4 text-xs text-slate-500">{booking.bookingId}</p>
+        <form onSubmit={save} className="p-5"><fieldset disabled={saving} className="grid gap-4">
           {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
           <label htmlFor="edit-title" className="grid gap-1.5 text-sm font-semibold">ប្រធានបទ<Input id="edit-title" name="title" defaultValue={booking.title} required className="h-10" /></label>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -110,17 +109,16 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
           </div>
           <label htmlFor="edit-attendees" className="grid gap-1.5 text-sm font-semibold">ចំនួនអ្នកចូលរួម<Input id="edit-attendees" name="attendees" type="number" min="0" defaultValue={booking.attendees} className="h-10" /></label>
           <label htmlFor="edit-notes" className="grid gap-1.5 text-sm font-semibold">កំណត់ចំណាំ<Textarea id="edit-notes" name="notes" defaultValue={booking.notes} rows={4} /></label>
-          <div className="mt-2 flex justify-end gap-2 border-t pt-4"><Button type="button" variant="outline" onClick={onClose}>បោះបង់</Button><Button type="submit" disabled={saving}>{saving ? 'កំពុងរក្សាទុក…' : 'រក្សាទុកការកែប្រែ'}</Button></div>
-        </form>
-      </div>
-    </dialog>
+          <div className="mt-2 flex justify-end gap-2 border-t pt-4"><Button type="button" variant="outline" onClick={onClose} disabled={saving}>បោះបង់</Button><Button type="submit" disabled={saving}>{saving ? 'កំពុងរក្សាទុក…' : 'រក្សាទុកការកែប្រែ'}</Button></div>
+        </fieldset></form>
+    </Modal>
   );
 }
 
-function DashboardContent({ user, onSignOut }: { user: DashboardUser; onSignOut: () => void }) {
+function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser; onSignOut: () => void; signingOut: boolean }) {
   const { email } = user;
   const canEdit = userCan(user, 'bookings');
-  const [view, setView] = useState<'bookings' | 'users'>('bookings');
+  const [view, setView] = useState<'bookings' | 'users' | 'reports' | 'inventory'>('bookings');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -129,6 +127,18 @@ function DashboardContent({ user, onSignOut }: { user: DashboardUser; onSignOut:
   const [status, setStatus] = useState('ACTIVE');
   const [editing, setEditing] = useState<Booking | null>(null);
   const [canceling, setCanceling] = useState<Booking | null>(null);
+  const [details, setDetails] = useState<Booking | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    const navigate = () => {
+      const hash = window.location.hash.slice(1);
+      setView(hash === 'reports' || hash === 'inventory' || (hash === 'users' && user.role === 'owner') ? hash : 'bookings');
+    };
+    navigate(); window.addEventListener('hashchange', navigate);
+    return () => window.removeEventListener('hashchange', navigate);
+  }, [user.role]);
 
   const load = useCallback(async (throwOnError = false) => {
     setLoading(true); setMessage('');
@@ -198,30 +208,35 @@ function DashboardContent({ user, onSignOut }: { user: DashboardUser; onSignOut:
   }), [bookings, query, status]);
 
   async function cancel() {
-    if (!canceling) return;
-    setMessage('');
+    if (!canceling || cancelBusy) return;
+    setCancelBusy(true); setCancelError('');
     try {
       await cancelById(canceling.bookingId);
-      setCanceling(null);
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'មានបញ្ហា'); }
+      setCanceling(null); setNotice('✅ បានលុបចោលការកក់។');
+    } catch (error) { setCancelError(error instanceof Error ? error.message : 'មានបញ្ហា'); }
+    finally { setCancelBusy(false); }
   }
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b bg-[#075d45] text-white">
+      <header className="border-b bg-[#075d45] text-white print:hidden">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl bg-white/12"><LayoutDashboard /></div><div><p className="text-xs text-emerald-100">KSFH Meeting</p><h1 className="font-bold">ផ្ទាំងគ្រប់គ្រង</h1></div></div>
-          <div className="flex flex-wrap items-center justify-end gap-2"><span className="text-xs text-emerald-100">{email}</span><Button variant="secondary" onClick={onSignOut}>ចាកចេញ</Button><Link href="/request" target="_blank"><Button variant="secondary"><Plus /> Form ស្នើសុំ <ExternalLink className="size-3" /></Button></Link></div>
+          <div className="flex flex-wrap items-center justify-end gap-2"><div className="text-right text-xs"><p className="font-semibold">{user.name || email}</p><p className="max-w-56 truncate text-emerald-100" title={email}>{email}</p><p className="mt-1 text-emerald-100">{user.role === 'owner' ? '👑 ម្ចាស់ប្រព័ន្ធ' : user.role === 'editor' ? '✏️ គ្រប់គ្រង Booking' : '👁️ មើលតែប៉ុណ្ណោះ'}</p></div><Button variant="secondary" disabled={signingOut} onClick={onSignOut}>{signingOut ? 'កំពុងចាកចេញ…' : 'ចាកចេញ'}</Button><Link href="/request" target="_blank"><Button variant="secondary"><Plus /> Form ស្នើសុំ <ExternalLink className="size-3" /></Button></Link></div>
         </div>
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        {user.role === 'owner' && <nav className="mb-5 flex gap-2" aria-label="ផ្នែក Dashboard"><Button variant={view === 'bookings' ? 'default' : 'outline'} onClick={() => setView('bookings')}>📅 ការកក់</Button><Button variant={view === 'users' ? 'default' : 'outline'} onClick={() => setView('users')}>👥 អ្នកប្រើ</Button></nav>}
-        {view === 'users' && user.role === 'owner' ? <UsersPanel /> : <>
+        <nav className="mb-5 flex flex-wrap gap-2 print:hidden" aria-label="ផ្នែក Dashboard">
+          {([{ key: 'bookings', label: '📅 ការកក់' }, { key: 'reports', label: '📊 របាយការណ៍' }, ...(user.role === 'owner' ? [{ key: 'users', label: '👥 អ្នកប្រើ' }] : []), { key: 'inventory', label: '📦 Inventory' }] as { key: typeof view; label: string }[]).map((item) => <Button key={item.key} aria-current={view === item.key ? 'page' : undefined} variant={view === item.key ? 'default' : 'outline'} onClick={() => { window.location.hash = item.key; setView(item.key); setNotice(''); }}>{item.label}</Button>)}
+        </nav>
+        {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
+        {view === 'inventory' ? <section aria-label="Inventory" className="min-h-[60vh] rounded-2xl border bg-white" /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : <>
         {!canEdit && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">👁️ សិទ្ធិមើលតែប៉ុណ្ណោះ — អ្នកអាចមើល និងស្វែងរកការកក់។</p>}
         {message && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4" />{message}</div>}
         {!configured && <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-bold text-amber-950">Backend មិនទាន់បានភ្ជាប់</h2><p className="mt-1 text-sm text-amber-800">កូដរួចរាល់ ប៉ុន្តែត្រូវបញ្ចូល Google Service Account និង Secrets នៅ Cloudflare មុនទទួលទិន្នន័យពិត។</p><Link href="/setup" className="mt-3 inline-block text-sm font-bold text-amber-900 underline">មើលវិធីភ្ជាប់</Link></div>}
 
+        {view === 'reports' ? <ReportsPanel bookings={bookings} loading={loading || !!message || !configured} onRefresh={() => void load()} onView={setDetails} /> : <>
         <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'ការកក់សកម្ម', value: active.length, icon: CalendarCheck, color: 'text-emerald-700 bg-emerald-50' },
@@ -235,28 +250,32 @@ function DashboardContent({ user, onSignOut }: { user: DashboardUser; onSignOut:
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 className="font-bold">បញ្ជីការកក់បន្ទប់</h2><p className="text-xs text-slate-500">{visible.length} កំណត់ត្រា</p></div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ស្វែងរក…" className="h-10 pl-9 sm:w-64" /></div>
-              <NativeSelect value={status} onChange={(event) => setStatus(event.target.value)} className="w-full sm:w-44 [&_select]:h-10"><NativeSelectOption value="ACTIVE">សកម្ម</NativeSelectOption><NativeSelectOption value="ALL">ទាំងអស់</NativeSelectOption><NativeSelectOption value="CONFIRMED">បានបញ្ជាក់</NativeSelectOption><NativeSelectOption value="ERROR">មានបញ្ហា</NativeSelectOption><NativeSelectOption value="CANCELED">បានលុបចោល</NativeSelectOption></NativeSelect>
+              <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input aria-label="ស្វែងរកការកក់" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ស្វែងរក…" className="h-10 pl-9 sm:w-64" /></div>
+              <NativeSelect aria-label="ស្ថានភាពការកក់" value={status} onChange={(event) => setStatus(event.target.value)} className="w-full sm:w-44 [&_select]:h-10"><NativeSelectOption value="ACTIVE">សកម្ម</NativeSelectOption><NativeSelectOption value="ALL">ទាំងអស់</NativeSelectOption><NativeSelectOption value="CONFIRMED">បានបញ្ជាក់</NativeSelectOption><NativeSelectOption value="ERROR">មានបញ្ហា</NativeSelectOption><NativeSelectOption value="CANCELED">បានលុបចោល</NativeSelectOption></NativeSelect>
               <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : ''} /></Button>
             </div>
           </div>
-          {loading ? <div className="p-12 text-center text-sm text-slate-500">កំពុងទាញទិន្នន័យ…</div> : visible.length === 0 ? <div className="p-12 text-center"><CalendarDays className="mx-auto mb-3 size-9 text-slate-300" /><p className="font-medium">មិនទាន់មានការកក់</p><p className="mt-1 text-sm text-slate-500">ការកក់ថ្មីនឹងបង្ហាញនៅទីនេះ</p></div> : (
+          {loading ? <div className="p-12 text-center text-sm text-slate-500">កំពុងទាញទិន្នន័យ…</div> : visible.length === 0 ? <div className="p-12 text-center"><CalendarDays className="mx-auto mb-3 size-9 text-slate-300" /><p className="font-medium">{bookings.length ? 'មិនមានលទ្ធផលតាមការស្វែងរក' : 'មិនទាន់មានការកក់'}</p><p className="mt-1 text-sm text-slate-500">{bookings.length ? 'សូមប្តូរពាក្យស្វែងរក ឬតម្រងស្ថានភាព។' : 'ការកក់ថ្មីនឹងបង្ហាញនៅទីនេះ'}</p></div> : (
             <div className="divide-y">
               {visible.map((booking) => <article key={booking.bookingId} className="grid gap-3 p-4 transition hover:bg-slate-50 sm:grid-cols-[110px_minmax(0,1fr)_180px_130px_auto] sm:items-center">
                 <div><p className="font-bold text-slate-900">{booking.date}</p><p className="text-sm text-emerald-700">{booking.startTime}–{booking.endTime}</p></div>
-                <div className="min-w-0"><p className="truncate font-semibold">{booking.title}</p><p className="truncate text-sm text-slate-500">👤 {booking.coordinator} · 🏢 {booking.department}</p><p className="mt-1 text-xs text-slate-400">{booking.bookingId}</p></div>
+                <div className="min-w-0"><button onClick={() => setDetails(booking)} className="text-left font-semibold leading-7 text-emerald-800 underline-offset-4 hover:underline focus-visible:outline-2">{booking.title}<span className="mt-1 block text-xs font-normal text-slate-500">មើលព័ត៌មានលម្អិត →</span></button><p className="truncate text-sm text-slate-500">👤 {booking.coordinator} · 🏢 {booking.department}</p><p className="mt-1 text-xs text-slate-400">{booking.bookingId}</p></div>
                 <div><p className="text-sm font-medium">📍 {booking.room}</p><p className="text-xs text-slate-500">👥 {booking.attendees || 0} នាក់</p></div>
                 <Status value={booking.status} />
-                <div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => setEditing(booking)} disabled={!canEdit || booking.status === 'CANCELED'} aria-label="កែប្រែ"><Pencil /></Button><Button variant="ghost" size="icon" className="text-red-600" onClick={() => setCanceling(booking)} disabled={!canEdit || booking.status === 'CANCELED'} aria-label="លុបចោល"><Trash2 /></Button></div>
+                {canEdit && <div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => setEditing(booking)} disabled={!canEdit || booking.status === 'CANCELED'} aria-label="កែប្រែ"><Pencil /></Button><Button variant="ghost" size="icon" className="text-red-600" onClick={() => { setCancelError(''); setCanceling(booking); }} disabled={!canEdit || booking.status === 'CANCELED'} aria-label="លុបចោល"><Trash2 /></Button></div>}
               </article>)}
             </div>
           )}
         </section>
         </>}
+        </>}
       </div>
 
-      {canEdit && editing && <EditPanel booking={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setBookings((items) => items.map((item) => item.bookingId === saved.bookingId ? saved : item)); setEditing(null); }} />}
-      {canEdit && canceling && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"><div className="mb-4 grid size-11 place-items-center rounded-xl bg-red-50 text-red-600"><Trash2 /></div><h2 className="font-bold">លុបចោលការកក់នេះ?</h2><p className="mt-2 text-sm text-slate-600">Calendar Event នឹងត្រូវលុប ហើយ Telegram នឹងបង្ហាញថាបានលុបចោល។ កំណត់ត្រានៅ Sheet នឹងរក្សាទុកសម្រាប់ប្រវត្តិ។</p><div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={() => setCanceling(null)}>ត្រឡប់</Button><Button variant="destructive" onClick={() => void cancel()}>លុបចោល</Button></div></div></div>}
+      {canEdit && editing && <EditPanel booking={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setBookings((items) => items.map((item) => item.bookingId === saved.bookingId ? saved : item)); setEditing(null); setNotice('✅ បានរក្សាទុកការកែប្រែ។'); }} />}
+      {details && <Modal title="📅 ព័ត៌មានលម្អិតការកក់" onClose={() => setDetails(null)}><div className="space-y-5 p-5"><div><Status value={details.status} /><h3 className="mt-3 break-words text-xl font-bold leading-8">{details.title}</h3><p className="mt-1 text-xs text-slate-500">{details.bookingId}</p></div><dl className="grid gap-4 sm:grid-cols-2">{[
+        ['📅 កាលបរិច្ឆេទ', details.date], ['🕒 ម៉ោងកម្ពុជា', details.startTime + '–' + details.endTime], ['📍 បន្ទប់', details.room], ['🏢 ផ្នែក', details.department], ['👤 អ្នកសម្របសម្រួល', details.coordinator], ['☎️ លេខទូរស័ព្ទ', details.phone], ['👥 អ្នកចូលរួម', String(details.attendees)], ['🛠️ បុគ្គលិកបច្ចេកទេស', details.technicalStaff.join(', ')], ['🎤 សម្ភារៈ', details.equipment.join(', ')], ['📝 កំណត់ចំណាំ', details.notes],
+      ].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{value || '—'}</dd></div>)}</dl>{details.error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{details.error}</p>}<div className="flex flex-wrap justify-end gap-2 border-t pt-4"><Button variant="outline" onClick={() => setDetails(null)}>ត្រឡប់</Button>{canEdit && details.status !== 'CANCELED' && <Button onClick={() => { setEditing(details); setDetails(null); }}>✏️ កែប្រែការកក់</Button>}</div></div></Modal>}
+      {canEdit && canceling && <Modal title="លុបចោលការកក់នេះ?" onClose={() => setCanceling(null)} busy={cancelBusy}><div className="space-y-4 p-5"><p className="font-semibold">{canceling.title}</p><p className="text-sm text-slate-500">{canceling.date} · {canceling.startTime}–{canceling.endTime} · {canceling.room}</p><p className="text-sm leading-6 text-slate-600">Calendar Event នឹងត្រូវលុប ហើយ Telegram នឹងបង្ហាញថាបានលុបចោល។ កំណត់ត្រានៅ Sheet នឹងរក្សាទុកសម្រាប់ប្រវត្តិ។</p>{cancelError && <p role="alert" className="text-sm text-red-700">{cancelError}</p>}<div className="flex justify-end gap-2"><Button variant="outline" disabled={cancelBusy} onClick={() => setCanceling(null)}>ត្រឡប់</Button><Button variant="destructive" disabled={cancelBusy} onClick={() => void cancel()}>{cancelBusy ? 'កំពុងលុបចោល…' : 'បញ្ជាក់លុបចោល'}</Button></div></div></Modal>}
     </main>
   );
 }
@@ -264,13 +283,15 @@ function DashboardContent({ user, onSignOut }: { user: DashboardUser; onSignOut:
 
 async function adminFetch(input: RequestInfo | URL, init?: RequestInit) {
   const response = await fetch(input, init);
-  if (response.status === 401 || response.status === 403) window.dispatchEvent(new Event('ksfh-session-expired'));
+  if (response.status === 401) window.dispatchEvent(new Event('ksfh-session-expired'));
   return response;
 }
 
 export function Dashboard() {
   const [user, setUser] = useState<DashboardUser | null>(null);
   const [checking, setChecking] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
+  const [sessionNotice, setSessionNotice] = useState('');
   const [error, setError] = useState('');
   const signedIn = useCallback(() => window.location.reload(), []);
 
@@ -286,7 +307,7 @@ export function Dashboard() {
         if (active) { setUser(null); setError(reason instanceof Error ? reason.message : 'មិនអាចភ្ជាប់បាន'); }
       } finally { if (active) setChecking(false); }
     }
-    const expire = () => setUser(null);
+    const expire = () => { setUser(null); setSessionNotice('ការចូលប្រើបានផុតកំណត់។ សូមចូលដោយ Google ម្តងទៀត។'); };
     void check();
     const timer = window.setInterval(() => void check(), 60000);
     window.addEventListener('ksfh-session-expired', expire);
@@ -294,17 +315,20 @@ export function Dashboard() {
   }, []);
 
   async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
     try {
       const response = await fetch('/api/auth/session', { method: 'DELETE' });
       if (!response.ok) throw new Error('មិនអាចចាកចេញបាន។ សូមព្យាយាមម្ដងទៀត');
       window.google?.accounts.id.disableAutoSelect();
-      setUser(null);
+      setUser(null); setSessionNotice('បានចាកចេញដោយជោគជ័យ។');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'មិនអាចចាកចេញបាន'); }
+    finally { setSigningOut(false); }
   }
 
   if (checking) return <main className="grid min-h-screen place-items-center bg-slate-50 text-sm text-slate-600">កំពុងពិនិត្យ Login…</main>;
   return <>
     {error && <div className="border-b bg-red-50 p-3 text-center text-sm text-red-700" role="alert">{error} <button className="underline" onClick={() => window.location.reload()}>Refresh</button></div>}
-    {user ? <DashboardContent user={user} onSignOut={() => void signOut()} /> : <GoogleLogin onSignedIn={signedIn} />}
+    {user ? <DashboardContent user={user} signingOut={signingOut} onSignOut={() => void signOut()} /> : <GoogleLogin onSignedIn={signedIn} notice={sessionNotice} />}
   </>;
 }
