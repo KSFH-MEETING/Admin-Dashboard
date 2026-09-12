@@ -73,7 +73,7 @@ export async function ensureBookingSheet() {
   const data = await metadata.json() as { sheets?: { properties?: { title?: string } }[] };
   if (!data.sheets?.some((sheet) => sheet.properties?.title === sheetName())) {
     await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}:batchUpdate`, {
-      method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName(), frozenRowCount: 1 } } }] }),
+      method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName(), gridProperties: { frozenRowCount: 1 } } } }] }),
     });
   }
   const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${sheetRange('A1:W1')}?valueInputOption=RAW`;
