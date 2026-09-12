@@ -5,7 +5,7 @@ import { ReportsPanel } from './reports-panel';
 import { UsersPanel } from './users-panel';
 import { userCan, type DashboardUser } from '@/lib/server/user-policy';
 import { GoogleLogin } from './google-login';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CalendarCheck, CalendarDays, CircleAlert, Clock3, ExternalLink, LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -125,6 +125,14 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('ACTIVE');
+  const [period, setPeriod] = useState('all');
+  const listHeading = useRef<HTMLHeadingElement>(null);
+  const periodLabel = period === 'today' ? 'ថ្ងៃនេះ' : period === 'upcoming' ? 'នឹងមកដល់' : 'គ្រប់ថ្ងៃ';
+  function selectSummary(scope: string) {
+    setPeriod(scope); setStatus('ACTIVE'); setQuery('');
+    listHeading.current?.focus({ preventScroll: true });
+    listHeading.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+  }
   const [editing, setEditing] = useState<Booking | null>(null);
   const [canceling, setCanceling] = useState<Booking | null>(null);
   const [details, setDetails] = useState<Booking | null>(null);
@@ -204,8 +212,9 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
   const visible = useMemo(() => bookings.filter((item) => {
     const matchesText = `${item.title} ${item.coordinator} ${item.room} ${item.department} ${item.bookingId}`.toLowerCase().includes(query.toLowerCase());
     const matchesStatus = status === 'ALL' || (status === 'ACTIVE' ? item.status !== 'CANCELED' : item.status === status);
-    return matchesText && matchesStatus;
-  }), [bookings, query, status]);
+    const matchesPeriod = period === 'all' || (period === 'today' ? item.date === today : item.date > today);
+    return matchesText && matchesStatus && matchesPeriod;
+  }), [bookings, query, status, period, today]);
 
   async function cancel() {
     if (!canceling || cancelBusy) return;
@@ -237,24 +246,26 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
         {!configured && <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-bold text-amber-950">Backend មិនទាន់បានភ្ជាប់</h2><p className="mt-1 text-sm text-amber-800">កូដរួចរាល់ ប៉ុន្តែត្រូវបញ្ចូល Google Service Account និង Secrets នៅ Cloudflare មុនទទួលទិន្នន័យពិត។</p><Link href="/setup" className="mt-3 inline-block text-sm font-bold text-amber-900 underline">មើលវិធីភ្ជាប់</Link></div>}
 
         {view === 'reports' ? <ReportsPanel bookings={bookings} loading={loading || !!message || !configured} onRefresh={() => void load()} onView={setDetails} /> : <>
-        <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section aria-label="សង្ខេបការកក់" className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: 'ការកក់សកម្ម', value: active.length, icon: CalendarCheck, color: 'text-emerald-700 bg-emerald-50' },
-            { label: 'ថ្ងៃនេះ', value: active.filter((item) => item.date === today).length, icon: CalendarDays, color: 'text-blue-700 bg-blue-50' },
-            { label: 'នឹងមកដល់', value: active.filter((item) => item.date > today).length, icon: Clock3, color: 'text-violet-700 bg-violet-50' },
-            { label: 'អ្នកចូលរួមសរុប', value: active.reduce((sum, item) => sum + item.attendees, 0), icon: UsersRound, color: 'text-orange-700 bg-orange-50' },
-          ].map((card) => <div key={card.label} className="rounded-2xl border bg-white p-5 shadow-sm"><div className={`mb-4 grid size-10 place-items-center rounded-xl ${card.color}`}><card.icon className="size-5" /></div><p className="text-sm text-slate-500">{card.label}</p><p className="mt-1 text-3xl font-bold text-slate-900">{card.value}</p></div>)}
+            { scope: 'all', label: 'ការកក់សកម្ម', value: active.length, icon: CalendarCheck, color: 'text-emerald-700 bg-emerald-50' },
+            { scope: 'today', label: 'ថ្ងៃនេះ', value: active.filter((item) => item.date === today).length, icon: CalendarDays, color: 'text-blue-700 bg-blue-50' },
+            { scope: 'upcoming', label: 'នឹងមកដល់', value: active.filter((item) => item.date > today).length, icon: Clock3, color: 'text-violet-700 bg-violet-50' },
+          ].map((card) => <button key={card.scope} type="button" aria-controls="booking-list" aria-pressed={period === card.scope && status === 'ACTIVE' && query === ''} onClick={() => selectSummary(card.scope)} disabled={loading || !configured || !!message} className="group rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:border-emerald-500 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700 aria-pressed:border-emerald-600 aria-pressed:bg-emerald-50/40 disabled:cursor-wait disabled:opacity-60"><span className={`mb-4 grid size-10 place-items-center rounded-xl ${card.color}`}><card.icon className="size-5" /></span><span className="block text-sm text-slate-500">{card.label}</span><span className="mt-1 block text-3xl font-bold text-slate-900">{loading ? '…' : card.value}</span><span className="mt-3 block text-xs font-medium text-emerald-700 group-hover:underline">មើលការកក់ →</span></button>)}
+          <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="mb-4 grid size-10 place-items-center rounded-xl bg-orange-50 text-orange-700"><UsersRound className="size-5" /></div><p className="text-sm text-slate-500">អ្នកចូលរួមសរុប</p><p className="mt-1 text-3xl font-bold text-slate-900">{loading ? '…' : active.reduce((sum, item) => sum + item.attendees, 0)}</p></div>
         </section>
 
-        <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <section id="booking-list" aria-labelledby="booking-list-title" className="overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><h2 className="font-bold">បញ្ជីការកក់បន្ទប់</h2><p className="text-xs text-slate-500">{visible.length} កំណត់ត្រា</p></div>
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div><h2 ref={listHeading} id="booking-list-title" tabIndex={-1} className="scroll-mt-5 font-bold outline-none">បញ្ជីការកក់បន្ទប់ · {periodLabel}</h2><output className="text-xs text-slate-500">{visible.length} កំណត់ត្រា</output></div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
               <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input aria-label="ស្វែងរកការកក់" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ស្វែងរក…" className="h-10 pl-9 sm:w-64" /></div>
+              <NativeSelect aria-label="ថ្ងៃការកក់" value={period} onChange={(event) => setPeriod(event.target.value)} className="w-full sm:w-36 [&_select]:h-10"><NativeSelectOption value="all">គ្រប់ថ្ងៃ</NativeSelectOption><NativeSelectOption value="today">ថ្ងៃនេះ</NativeSelectOption><NativeSelectOption value="upcoming">នឹងមកដល់</NativeSelectOption></NativeSelect>
               <NativeSelect aria-label="ស្ថានភាពការកក់" value={status} onChange={(event) => setStatus(event.target.value)} className="w-full sm:w-44 [&_select]:h-10"><NativeSelectOption value="ACTIVE">សកម្ម</NativeSelectOption><NativeSelectOption value="ALL">ទាំងអស់</NativeSelectOption><NativeSelectOption value="CONFIRMED">បានបញ្ជាក់</NativeSelectOption><NativeSelectOption value="ERROR">មានបញ្ហា</NativeSelectOption><NativeSelectOption value="CANCELED">បានលុបចោល</NativeSelectOption></NativeSelect>
               <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : ''} /></Button>
             </div>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-slate-50 px-4 py-3"><p className="text-xs text-slate-600">ម៉ោងកម្ពុជា · ចុចចំណងជើងការកក់ ដើម្បីមើលព័ត៌មានលម្អិត។</p><div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => { setPeriod('all'); setStatus('ACTIVE'); setQuery(''); }}>សម្អាតតម្រង</Button><a href="/request" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"><Plus className="size-4" />កក់បន្ទប់ថ្មី<ExternalLink className="size-3" /></a></div></div>
           {loading ? <div className="p-12 text-center text-sm text-slate-500">កំពុងទាញទិន្នន័យ…</div> : visible.length === 0 ? <div className="p-12 text-center"><CalendarDays className="mx-auto mb-3 size-9 text-slate-300" /><p className="font-medium">{bookings.length ? 'មិនមានលទ្ធផលតាមការស្វែងរក' : 'មិនទាន់មានការកក់'}</p><p className="mt-1 text-sm text-slate-500">{bookings.length ? 'សូមប្តូរពាក្យស្វែងរក ឬតម្រងស្ថានភាព។' : 'ការកក់ថ្មីនឹងបង្ហាញនៅទីនេះ'}</p></div> : (
             <div className="divide-y">
               {visible.map((booking) => <article key={booking.bookingId} className="grid gap-3 p-4 transition hover:bg-slate-50 sm:grid-cols-[110px_minmax(0,1fr)_180px_130px_auto] sm:items-center">
