@@ -20,7 +20,7 @@ export function userCan(user: Pick<DashboardUser, 'active' | 'role'>, permission
   if (!user.active) return false;
   if (permission === 'users') return user.role === 'owner';
   if (permission === 'bookings') return user.role === 'owner' || user.role === 'editor';
-  return ['owner', 'editor', 'viewer'].includes(user.role);
+  return permission === 'read' && ['owner', 'editor', 'viewer'].includes(user.role);
 }
 
 // Append order is authoritative, so a later disable record revokes access even

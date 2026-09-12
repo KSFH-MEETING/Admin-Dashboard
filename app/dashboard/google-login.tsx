@@ -1,7 +1,7 @@
+/* eslint-disable nextjs/no-html-link-for-pages -- Use native navigation: Vinext client navigation fails for the public request route. */
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 type GoogleIdentity = {
@@ -31,7 +31,7 @@ function loadGoogle() {
   return googleLoader;
 }
 
-export function GoogleLogin({ onSignedIn, notice = '' }: { onSignedIn: (email: string) => void; notice?: string }) {
+export function GoogleLogin({ onSignedIn, onGuest, notice = '' }: { onSignedIn: (email: string) => void; onGuest: () => void; notice?: string }) {
   const button = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -74,11 +74,14 @@ export function GoogleLogin({ onSignedIn, notice = '' }: { onSignedIn: (email: s
       <p className="mt-3 text-sm leading-6 text-slate-600">សូមប្រើគណនី Google ដែលម្ចាស់ប្រព័ន្ធបានផ្តល់សិទ្ធិ។ អ្នកនឹងឃើញមុខងារតាមសិទ្ធិរបស់អ្នក។</p>
       {notice && <output className="mt-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">{notice}</output>}
       <div ref={button} className={`mt-6 flex justify-center ${busy ? 'pointer-events-none opacity-50' : ''}`} />
+      <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" /><span>ឬ</span><span className="h-px flex-1 bg-slate-200" /></div>
+      <Button type="button" variant="outline" className="w-full" onClick={onGuest}>🌐 ចូលជា Guest ដោយមិន Login</Button>
+      <p className="mt-2 text-xs leading-5 text-slate-500">Guest អាចមើលព័ត៌មានការកក់ និងរបាយការណ៍ តែមិនអាចកែ ឬលុបបាន។</p>
       {!ready && !message && <p className="mt-4 text-sm text-slate-500">កំពុងបើក Google Login…</p>}
       {busy && <output className="mt-4 block text-sm text-slate-500">កំពុងផ្ទៀងផ្ទាត់គណនី…</output>}
       {message && <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{message}<div className="mt-3"><Button variant="outline" disabled={busy} onClick={() => { setMessage(''); setReady(false); setAttempt((value) => value + 1); }}>ព្យាយាមម្ដងទៀត</Button></div></div>}
       <div className="mt-6 rounded-xl bg-slate-50 p-4 text-left text-sm leading-6"><p className="font-semibold">មិនទាន់មានសិទ្ធិចូល?</p><p className="mt-1 text-slate-600">ទាក់ទងម្ចាស់ប្រព័ន្ធ ដើម្បីបន្ថែម Google Email របស់អ្នក។ មិនចាំបាច់បង្កើត Password ថ្មីទេ។</p><p className="mt-2 text-slate-600">សម្រាប់ស្នើសុំបន្ទប់ អ្នកអាចប្រើ Form ខាងក្រោម ដោយមិនចាំបាច់ Login។</p></div>
-      <Link href="/request" className="mt-7 inline-block text-sm text-emerald-700 underline">បើក Form ស្នើសុំបន្ទប់</Link>
+      <a href="/request" className="mt-7 inline-block text-sm text-emerald-700 underline">បើក Form ស្នើសុំបន្ទប់</a>
     </section>
   </main>;
 }

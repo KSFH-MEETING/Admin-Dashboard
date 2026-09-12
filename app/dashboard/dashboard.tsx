@@ -1,5 +1,6 @@
 'use client';
 
+import { dashboardFetch as adminFetch } from '@/lib/dashboard-fetch';
 import { Modal } from './modal';
 import { ReportsPanel } from './reports-panel';
 import { UsersPanel } from './users-panel';
@@ -115,7 +116,7 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
   );
 }
 
-function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser; onSignOut: () => void; signingOut: boolean }) {
+function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user: DashboardUser; onSignOut: () => void; signingOut: boolean; guest?: boolean }) {
   const { email } = user;
   const canEdit = userCan(user, 'bookings');
   const [view, setView] = useState<'bookings' | 'users' | 'reports' | 'inventory'>('bookings');
@@ -151,7 +152,7 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
   const load = useCallback(async (throwOnError = false) => {
     setLoading(true); setMessage('');
     try {
-      const response = await adminFetch('/api/admin/bookings', { cache: 'no-store' });
+      const response = await (guest ? fetch('/api/guest/bookings', { cache: 'no-store' }) : adminFetch('/api/admin/bookings', { cache: 'no-store' }));
       const result = await response.json() as ApiList;
       if (!response.ok) throw new Error(result.message || 'មិនអាចអានទិន្នន័យបាន');
       const items = result.bookings || [];
@@ -163,7 +164,7 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
       return [];
     }
     finally { setLoading(false); }
-  }, []);
+  }, [guest]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -182,7 +183,7 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
   useWebMcpTool(READ_BOOKINGS_TOOL, async () => {
     const items = await load(true);
     return { count: items.length, bookings: items };
-  });
+  }, !guest);
 
   useWebMcpTool(UPDATE_BOOKING_TOOL, async (raw) => {
     if (!canEdit) throw new Error('សិទ្ធិមើលតែប៉ុណ្ណោះ');
@@ -199,14 +200,14 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
     if (!response.ok || !result.booking) throw new Error(result.message || 'Unable to update booking.');
     setBookings((items) => items.map((item) => item.bookingId === id ? result.booking as Booking : item));
     return { bookingId: result.booking.bookingId, status: result.booking.status };
-  });
+  }, canEdit);
 
   useWebMcpTool(CANCEL_BOOKING_TOOL, async (raw) => {
     const id = raw && typeof raw === 'object' && typeof (raw as Record<string, unknown>).bookingId === 'string' ? String((raw as Record<string, unknown>).bookingId) : '';
     if (!id) throw new Error('bookingId is required.');
     const booking = await cancelById(id);
     return { bookingId: booking.bookingId, status: booking.status };
-  });
+  }, canEdit);
   const today = todayString();
   const active = bookings.filter((item) => item.status !== 'CANCELED');
   const visible = useMemo(() => bookings.filter((item) => {
@@ -231,7 +232,7 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
       <header className="border-b bg-[#075d45] text-white print:hidden">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl bg-white/12"><LayoutDashboard /></div><div><p className="text-xs text-emerald-100">KSFH Meeting</p><h1 className="font-bold">ផ្ទាំងគ្រប់គ្រង</h1></div></div>
-          <div className="flex flex-wrap items-center justify-end gap-2"><div className="text-right text-xs"><p className="font-semibold">{user.name || email}</p><p className="max-w-56 truncate text-emerald-100" title={email}>{email}</p><p className="mt-1 text-emerald-100">{user.role === 'owner' ? '👑 ម្ចាស់ប្រព័ន្ធ' : user.role === 'editor' ? '✏️ គ្រប់គ្រង Booking' : '👁️ មើលតែប៉ុណ្ណោះ'}</p></div><Button variant="secondary" disabled={signingOut} onClick={onSignOut}>{signingOut ? 'កំពុងចាកចេញ…' : 'ចាកចេញ'}</Button><Link href="/request" target="_blank"><Button variant="secondary"><Plus /> Form ស្នើសុំ <ExternalLink className="size-3" /></Button></Link></div>
+          <div className="flex flex-wrap items-center justify-end gap-2"><div className="text-right text-xs"><p className="font-semibold">{guest ? 'Guest' : user.name || email}</p>{!guest && <p className="max-w-56 truncate text-emerald-100" title={email}>{email}</p>}<p className="mt-1 text-emerald-100">{guest ? '🌐 សាធារណៈ · មើលតែប៉ុណ្ណោះ' : user.role === 'owner' ? '👑 ម្ចាស់ប្រព័ន្ធ' : user.role === 'editor' ? '✏️ គ្រប់គ្រង Booking' : '👁️ មើលតែប៉ុណ្ណោះ'}</p></div><Button variant="secondary" disabled={signingOut} onClick={onSignOut}>{signingOut ? 'កំពុងចាកចេញ…' : guest ? 'ចូលគណនី Google' : 'ចាកចេញ'}</Button><Link href="/request" target="_blank"><Button variant="secondary"><Plus /> Form ស្នើសុំ <ExternalLink className="size-3" /></Button></Link></div>
         </div>
       </header>
 
@@ -241,7 +242,7 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
         </nav>
         {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
         {view === 'inventory' ? <section aria-label="Inventory" className="min-h-[60vh] rounded-2xl border bg-white" /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : <>
-        {!canEdit && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">👁️ សិទ្ធិមើលតែប៉ុណ្ណោះ — អ្នកអាចមើល និងស្វែងរកការកក់។</p>}
+        {!canEdit && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm leading-7 text-blue-800">{guest ? '🌐 Guest mode — អ្នកកំពុងមើល Dashboard សាធារណៈ។ អ្នកអាចមើលព័ត៌មានការកក់គ្រប់ផ្នែក និងរបាយការណ៍ ប៉ុន្តែមិនអាចកែ ឬលុបបាន។' : '👁️ សិទ្ធិមើលតែប៉ុណ្ណោះ — អ្នកអាចមើល និងស្វែងរកការកក់។'}</p>}
         {message && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4" />{message}</div>}
         {!configured && <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-bold text-amber-950">Backend មិនទាន់បានភ្ជាប់</h2><p className="mt-1 text-sm text-amber-800">កូដរួចរាល់ ប៉ុន្តែត្រូវបញ្ចូល Google Service Account និង Secrets នៅ Cloudflare មុនទទួលទិន្នន័យពិត។</p><Link href="/setup" className="mt-3 inline-block text-sm font-bold text-amber-900 underline">មើលវិធីភ្ជាប់</Link></div>}
 
@@ -292,14 +293,9 @@ function DashboardContent({ user, onSignOut, signingOut }: { user: DashboardUser
 }
 
 
-async function adminFetch(input: RequestInfo | URL, init?: RequestInit) {
-  const response = await fetch(input, init);
-  if (response.status === 401) window.dispatchEvent(new Event('ksfh-session-expired'));
-  return response;
-}
-
 export function Dashboard() {
   const [user, setUser] = useState<DashboardUser | null>(null);
+  const [guest, setGuest] = useState(false);
   const [checking, setChecking] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [sessionNotice, setSessionNotice] = useState('');
@@ -312,8 +308,9 @@ export function Dashboard() {
       try {
         const response = await fetch('/api/auth/session', { cache: 'no-store' });
         if (!response.ok) throw new Error('មិនអាចពិនិត្យ Login បាន។ សូម Refresh ទំព័រ');
-        const result = await response.json() as { email: string | null; user?: DashboardUser };
-        if (active) { setUser(result.user || null); setError(''); }
+        const result = await response.json() as { email: string | null; user?: DashboardUser; reason?: string; message?: string };
+        if (active && result.reason === 'forbidden') setSessionNotice(result.message || 'គណនីនេះមិនមានសិទ្ធិចូល Dashboard។ សូមទាក់ទងម្ចាស់ប្រព័ន្ធ។');
+        if (active) { setUser(result.user || null); setGuest(!result.user && window.sessionStorage.getItem('ksfh-guest') === '1'); setError(''); }
       } catch (reason) {
         if (active) { setUser(null); setError(reason instanceof Error ? reason.message : 'មិនអាចភ្ជាប់បាន'); }
       } finally { if (active) setChecking(false); }
@@ -321,8 +318,10 @@ export function Dashboard() {
     const expire = () => { setUser(null); setSessionNotice('ការចូលប្រើបានផុតកំណត់។ សូមចូលដោយ Google ម្តងទៀត។'); };
     void check();
     const timer = window.setInterval(() => void check(), 60000);
+    const permissionsChanged = () => { void check(); };
     window.addEventListener('ksfh-session-expired', expire);
-    return () => { active = false; window.clearInterval(timer); window.removeEventListener('ksfh-session-expired', expire); };
+    window.addEventListener('ksfh-permissions-changed', permissionsChanged);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('ksfh-session-expired', expire); window.removeEventListener('ksfh-permissions-changed', permissionsChanged); };
   }, []);
 
   async function signOut() {
@@ -332,14 +331,17 @@ export function Dashboard() {
       const response = await fetch('/api/auth/session', { method: 'DELETE' });
       if (!response.ok) throw new Error('មិនអាចចាកចេញបាន។ សូមព្យាយាមម្ដងទៀត');
       window.google?.accounts.id.disableAutoSelect();
-      setUser(null); setSessionNotice('បានចាកចេញដោយជោគជ័យ។');
+      setUser(null); setGuest(false); window.sessionStorage.removeItem('ksfh-guest'); setSessionNotice('បានចាកចេញដោយជោគជ័យ។');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'មិនអាចចាកចេញបាន'); }
     finally { setSigningOut(false); }
   }
 
+  function enterGuest() { window.sessionStorage.setItem('ksfh-guest', '1'); setSessionNotice(''); setGuest(true); window.location.hash = 'bookings'; }
+  function leaveGuest() { window.sessionStorage.removeItem('ksfh-guest'); setGuest(false); setSessionNotice(''); }
+
   if (checking) return <main className="grid min-h-screen place-items-center bg-slate-50 text-sm text-slate-600">កំពុងពិនិត្យ Login…</main>;
   return <>
     {error && <div className="border-b bg-red-50 p-3 text-center text-sm text-red-700" role="alert">{error} <button className="underline" onClick={() => window.location.reload()}>Refresh</button></div>}
-    {user ? <DashboardContent user={user} signingOut={signingOut} onSignOut={() => void signOut()} /> : <GoogleLogin onSignedIn={signedIn} notice={sessionNotice} />}
+    {user ? <DashboardContent user={user} signingOut={signingOut} onSignOut={() => void signOut()} /> : guest ? <DashboardContent guest user={{ email: '', name: 'Guest', role: 'viewer', active: true, updatedAt: '', updatedBy: '' }} signingOut={false} onSignOut={leaveGuest} /> : <GoogleLogin onSignedIn={signedIn} onGuest={enterGuest} notice={sessionNotice} />}
   </>;
 }

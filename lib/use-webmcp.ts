@@ -18,17 +18,17 @@ declare global {
   }
 }
 
-export function useWebMcpTool(tool: WebMcpTool, execute: (input: unknown) => unknown) {
+export function useWebMcpTool(tool: WebMcpTool, execute: (input: unknown) => unknown, enabled = true) {
   const executeRef = useRef(execute);
   useEffect(() => { executeRef.current = execute; }, [execute]);
 
   useEffect(() => {
     const context = document.modelContext;
-    if (!context?.registerTool) return;
+    if (!enabled || !context?.registerTool) return;
     const lifecycle = new AbortController();
     try {
       void Promise.resolve(context.registerTool({ ...tool, execute: (input) => executeRef.current(input) }, { signal: lifecycle.signal })).catch(() => undefined);
     } catch { /* WebMCP is optional in browsers that do not support it. */ }
     return () => lifecycle.abort();
-  }, [tool]);
+  }, [tool, enabled]);
 }

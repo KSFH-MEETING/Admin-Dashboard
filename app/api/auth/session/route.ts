@@ -10,7 +10,8 @@ export async function GET(request: Request) {
     const user = await requireDashboardUser(request);
     return Response.json({ email: user.email, user, clientId }, { headers });
   } catch (error) {
-    return Response.json({ email: null, clientId, message: error instanceof Error ? error.message : '' }, { headers });
+    if (!(error instanceof AuthError)) return Response.json({ message: 'មិនអាចពិនិត្យសិទ្ធិបាន។ សូមព្យាយាមម្ដងទៀត។' }, { status: 503, headers });
+    return Response.json({ email: null, clientId, reason: error.status === 403 ? 'forbidden' : 'unauthenticated', message: error.message }, { headers });
   }
 }
 
