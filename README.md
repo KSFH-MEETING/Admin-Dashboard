@@ -64,3 +64,12 @@ Auth regression tests: `npm run test:auth`.
 ## សុវត្ថិភាព
 
 Bot Token ដែលធ្លាប់ផ្ញើក្នុង Chat ត្រូវចាត់ទុកថាបានបែកធ្លាយ។ ចូល `@BotFather` ហើយប្រើ `/revoke` មុនដាក់ Token ថ្មីក្នុង Cloudflare Secret។ មិនមាន Token ឬ Google Private Key នៅក្នុង Source Code នេះទេ។
+
+
+## Dashboard users
+
+Owners listed in ADMIN_EMAILS can open Dashboard → Users to add existing Google accounts, change names/roles, or disable/reactivate access. The owner cannot be removed through the app. Viewers can read bookings; editors can also change/cancel bookings. Public /request still accepts requests without Dashboard login. No invitation emails or Google accounts are created.
+
+User permissions and their change history are stored as append-only rows in the DashboardUsers tab of the configured Google Sheet. Keep spreadsheet edit access limited to trusted administrators, since it controls both booking data and user permissions. Non-owner permissions are checked on every server request, including existing sessions; disabling a user revokes their next request. Login supports Gmail and Google Workspace identities.
+
+Calendar events show emoji labels and the KSFH-MEETING brand in their description. Google's native creator field is read-only and remains the actual service account. New/edited bookings receive this styling.

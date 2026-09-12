@@ -1,4 +1,4 @@
-import { authConfig, authCookie, requireAdmin, SESSION_COOKIE } from '@/lib/server/admin-auth';
+import { authConfig, authCookie, requireDashboardUser, SESSION_COOKIE } from '@/lib/server/admin-auth';
 import { AuthError, requireSameOrigin } from '@/lib/server/google-identity';
 
 export const dynamic = 'force-dynamic';
@@ -7,7 +7,8 @@ export async function GET(request: Request) {
   const headers = { 'Cache-Control': 'no-store' };
   const { clientId } = authConfig();
   try {
-    return Response.json({ email: await requireAdmin(request), clientId }, { headers });
+    const user = await requireDashboardUser(request);
+    return Response.json({ email: user.email, user, clientId }, { headers });
   } catch (error) {
     return Response.json({ email: null, clientId, message: error instanceof Error ? error.message : '' }, { headers });
   }

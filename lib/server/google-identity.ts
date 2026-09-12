@@ -23,8 +23,8 @@ export function readCookie(request: Request, name: string) {
 
 // Google's signature is checked on every admin request; the cookie cannot extend
 // the Google ID token's lifetime. The nonce binds initial login to this browser.
-export async function verifyGoogleAdmin(
-  token: string, clientId: string, allowedEmails: string[], nonce?: string,
+export async function verifyGoogleIdentity(
+  token: string, clientId: string, nonce?: string,
   keys: JWTVerifyGetKey = googleKeys,
 ) {
   if (!clientId) throw new AuthError('Google Login មិនទាន់បានកំណត់', 503);
@@ -40,8 +40,7 @@ export async function verifyGoogleAdmin(
     if (nonce !== undefined && (!nonce || payload.nonce !== nonce)) throw new AuthError('សូមចាប់ផ្ដើម Login ម្ដងទៀត');
     const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
     if (!payload.sub || payload.email_verified !== true ||
-      (!email.endsWith('@gmail.com') && typeof payload.hd !== 'string') ||
-      !allowedEmails.map((value) => value.trim().toLowerCase()).includes(email)) {
+      (!email.endsWith('@gmail.com') && typeof payload.hd !== 'string')) {
       throw new AuthError('គណនីនេះមិនមានសិទ្ធិគ្រប់គ្រង', 403);
     }
     return { email, expiresAt: payload.exp as number };
@@ -49,4 +48,12 @@ export async function verifyGoogleAdmin(
     if (error instanceof AuthError) throw error;
     throw new AuthError('ការចូលប្រើផុតកំណត់ ឬមិនត្រឹមត្រូវ។ សូម Sign in with Google ម្ដងទៀត');
   }
+}
+
+
+// Compatibility helper for fixed allowlists and focused token regression tests.
+export async function verifyGoogleAdmin(token: string, clientId: string, allowedEmails: string[], nonce?: string, keys: JWTVerifyGetKey = googleKeys) {
+  const identity = await verifyGoogleIdentity(token, clientId, nonce, keys);
+  if (!allowedEmails.map((email) => email.trim().toLowerCase()).includes(identity.email)) throw new AuthError('គណនីនេះមិនមានសិទ្ធិគ្រប់គ្រង', 403);
+  return identity;
 }

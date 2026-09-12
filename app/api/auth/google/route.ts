@@ -1,5 +1,7 @@
 import { authConfig, authCookie, NONCE_COOKIE, SESSION_COOKIE } from '@/lib/server/admin-auth';
-import { AuthError, readCookie, requireSameOrigin, verifyGoogleAdmin } from '@/lib/server/google-identity';
+import { AuthError, readCookie, requireSameOrigin, verifyGoogleIdentity } from '@/lib/server/google-identity';
+
+import { resolveDashboardUser } from '@/lib/server/dashboard-users';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +35,9 @@ export async function POST(request: Request) {
     const data = JSON.parse(body) as { credential?: unknown; nonce?: unknown };
     const nonce = readCookie(request, NONCE_COOKIE);
     if (!nonce || data.nonce !== nonce || typeof data.credential !== 'string') throw new AuthError('សូមចាប់ផ្ដើម Login ម្ដងទៀត');
-    const { clientId, allowedEmails } = authConfig();
-    const identity = await verifyGoogleAdmin(data.credential, clientId, allowedEmails, nonce);
+    const { clientId } = authConfig();
+    const identity = await verifyGoogleIdentity(data.credential, clientId, nonce);
+    await resolveDashboardUser(identity.email);
     const headers = new Headers({ 'Cache-Control': 'no-store' });
     headers.append('Set-Cookie', authCookie(SESSION_COOKIE, data.credential, Math.max(0, Math.min(3600, identity.expiresAt - Math.floor(Date.now() / 1000)))));
     headers.append('Set-Cookie', authCookie(NONCE_COOKIE, '', 0));

@@ -1,3 +1,4 @@
+import { calendarEventBody } from './calendar-event';
 import { optionalEnv, requiredEnv } from './env';
 import { bookingToRow, rowToBooking, SHEET_HEADERS, type Booking } from './types';
 
@@ -45,7 +46,7 @@ async function accessToken(): Promise<string> {
   return result.access_token;
 }
 
-async function googleFetch(url: string, init?: RequestInit, accepted: number[] = []): Promise<Response> {
+export async function googleFetch(url: string, init?: RequestInit, accepted: number[] = []): Promise<Response> {
   const headers = new Headers(init?.headers);
   headers.set('Authorization', `Bearer ${await accessToken()}`);
   headers.set('Content-Type', 'application/json');
@@ -115,35 +116,24 @@ function calendarUrl(eventId = '') {
   return `https://www.googleapis.com/calendar/v3/calendars/${calendar}/events${eventId ? `/${encodeURIComponent(eventId)}` : ''}`;
 }
 
-function eventBody(booking: Booking) {
-  const details = [
-    `លេខសម្គាល់: ${booking.bookingId}`, `អ្នកសម្របសម្រួល: ${booking.coordinator}`,
-    `ផ្នែក: ${booking.department}`, booking.phone ? `ទូរស័ព្ទ: ${booking.phone}` : '',
-    booking.attendees ? `អ្នកចូលរួម: ${booking.attendees}` : '',
-    booking.technicalStaff.length ? `បុគ្គលិក: ${booking.technicalStaff.join(', ')}` : '',
-    booking.equipment.length ? `សម្ភារៈ: ${booking.equipment.join(', ')}` : '',
-    booking.notes ? `កំណត់ចំណាំ: ${booking.notes}` : '',
-  ].filter(Boolean).join('\n');
-  return {
-    id: booking.googleEventId, summary: booking.title, location: booking.room, description: details,
-    start: { dateTime: `${booking.date}T${booking.startTime}:00+07:00`, timeZone: booking.timeZone },
-    end: { dateTime: `${booking.date}T${booking.endTime}:00+07:00`, timeZone: booking.timeZone },
-    extendedProperties: { private: { bookingId: booking.bookingId, requestId: booking.requestId } },
-  };
-}
-
 export async function ensureCalendarEvent(booking: Booking) {
-  const response = await googleFetch(calendarUrl(), { method: 'POST', body: JSON.stringify(eventBody(booking)) }, [409]);
+  const response = await googleFetch(calendarUrl(), { method: 'POST', body: JSON.stringify(calendarEventBody(booking)) }, [409]);
   if (response.status === 409) return booking.googleEventId;
   const result = await response.json() as { id?: string };
   return result.id || booking.googleEventId;
 }
 
 export async function updateCalendarEvent(booking: Booking) {
-  await googleFetch(calendarUrl(booking.googleEventId), { method: 'PUT', body: JSON.stringify(eventBody(booking)) });
+  await googleFetch(calendarUrl(booking.googleEventId), { method: 'PUT', body: JSON.stringify(calendarEventBody(booking)) });
 }
 
 export async function cancelCalendarEvent(eventId: string) {
   if (!eventId) return;
   await googleFetch(calendarUrl(eventId), { method: 'DELETE' }, [404, 410]);
+}
+
+export async function refreshCalendarEventStyle(booking: Booking) {
+  const { summary, description } = calendarEventBody(booking);
+  // Patch presentation only; preserve dates, participants and all other fields.
+  await googleFetch(calendarUrl(booking.googleEventId), { method: 'PATCH', body: JSON.stringify({ summary, description }) });
 }

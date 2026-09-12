@@ -1,5 +1,7 @@
 'use client';
 
+import { UsersPanel } from './users-panel';
+import { userCan, type DashboardUser } from '@/lib/server/user-policy';
 import { GoogleLogin } from './google-login';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -16,7 +18,7 @@ import { useWebMcpTool } from '@/lib/use-webmcp';
 type ApiList = { bookings?: Booking[]; configured?: boolean; message?: string };
 
 const statusText: Record<string, string> = {
-  PENDING: 'កំពុងដំណើរការ', CALENDAR_CREATED: 'បានបង្កើត Calendar', CONFIRMED: 'បានបញ្ជាក់', ERROR: 'មានបញ្ហា', CANCELED: 'បានលុបចោល',
+  PENDING: '⏳ កំពុងដំណើរការ', CALENDAR_CREATED: '📅 បានបង្កើត Calendar', CONFIRMED: '✅ បានបញ្ជាក់', ERROR: '⚠️ មានបញ្ហា', CANCELED: '❌ បានលុបចោល',
 };
 
 const READ_BOOKINGS_TOOL = {
@@ -115,7 +117,10 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
   );
 }
 
-function DashboardContent({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+function DashboardContent({ user, onSignOut }: { user: DashboardUser; onSignOut: () => void }) {
+  const { email } = user;
+  const canEdit = userCan(user, 'bookings');
+  const [view, setView] = useState<'bookings' | 'users'>('bookings');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -148,6 +153,7 @@ function DashboardContent({ email, onSignOut }: { email: string; onSignOut: () =
   }, [load]);
 
   async function cancelById(id: string) {
+    if (!canEdit) throw new Error('សិទ្ធិមើលតែប៉ុណ្ណោះ');
     const response = await adminFetch(`/api/admin/bookings/${encodeURIComponent(id)}`, { method: 'DELETE' });
     const result = await response.json() as { booking?: Booking; message?: string };
     if (!response.ok || !result.booking) throw new Error(result.message || 'មិនអាចលុបចោលបាន');
@@ -161,6 +167,7 @@ function DashboardContent({ email, onSignOut }: { email: string; onSignOut: () =
   });
 
   useWebMcpTool(UPDATE_BOOKING_TOOL, async (raw) => {
+    if (!canEdit) throw new Error('សិទ្ធិមើលតែប៉ុណ្ណោះ');
     if (!raw || typeof raw !== 'object') throw new Error('Update input must be an object.');
     const data = raw as Record<string, unknown>;
     const id = typeof data.bookingId === 'string' ? data.bookingId : '';
@@ -209,6 +216,9 @@ function DashboardContent({ email, onSignOut }: { email: string; onSignOut: () =
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        {user.role === 'owner' && <nav className="mb-5 flex gap-2" aria-label="ផ្នែក Dashboard"><Button variant={view === 'bookings' ? 'default' : 'outline'} onClick={() => setView('bookings')}>📅 ការកក់</Button><Button variant={view === 'users' ? 'default' : 'outline'} onClick={() => setView('users')}>👥 អ្នកប្រើ</Button></nav>}
+        {view === 'users' && user.role === 'owner' ? <UsersPanel /> : <>
+        {!canEdit && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">👁️ សិទ្ធិមើលតែប៉ុណ្ណោះ — អ្នកអាចមើល និងស្វែងរកការកក់។</p>}
         {message && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4" />{message}</div>}
         {!configured && <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-bold text-amber-950">Backend មិនទាន់បានភ្ជាប់</h2><p className="mt-1 text-sm text-amber-800">កូដរួចរាល់ ប៉ុន្តែត្រូវបញ្ចូល Google Service Account និង Secrets នៅ Cloudflare មុនទទួលទិន្នន័យពិត។</p><Link href="/setup" className="mt-3 inline-block text-sm font-bold text-amber-900 underline">មើលវិធីភ្ជាប់</Link></div>}
 
@@ -234,18 +244,19 @@ function DashboardContent({ email, onSignOut }: { email: string; onSignOut: () =
             <div className="divide-y">
               {visible.map((booking) => <article key={booking.bookingId} className="grid gap-3 p-4 transition hover:bg-slate-50 sm:grid-cols-[110px_minmax(0,1fr)_180px_130px_auto] sm:items-center">
                 <div><p className="font-bold text-slate-900">{booking.date}</p><p className="text-sm text-emerald-700">{booking.startTime}–{booking.endTime}</p></div>
-                <div className="min-w-0"><p className="truncate font-semibold">{booking.title}</p><p className="truncate text-sm text-slate-500">{booking.coordinator} · {booking.department}</p><p className="mt-1 text-xs text-slate-400">{booking.bookingId}</p></div>
-                <div><p className="text-sm font-medium">{booking.room}</p><p className="text-xs text-slate-500">{booking.attendees || 0} នាក់</p></div>
+                <div className="min-w-0"><p className="truncate font-semibold">{booking.title}</p><p className="truncate text-sm text-slate-500">👤 {booking.coordinator} · 🏢 {booking.department}</p><p className="mt-1 text-xs text-slate-400">{booking.bookingId}</p></div>
+                <div><p className="text-sm font-medium">📍 {booking.room}</p><p className="text-xs text-slate-500">👥 {booking.attendees || 0} នាក់</p></div>
                 <Status value={booking.status} />
-                <div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => setEditing(booking)} disabled={booking.status === 'CANCELED'} aria-label="កែប្រែ"><Pencil /></Button><Button variant="ghost" size="icon" className="text-red-600" onClick={() => setCanceling(booking)} disabled={booking.status === 'CANCELED'} aria-label="លុបចោល"><Trash2 /></Button></div>
+                <div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => setEditing(booking)} disabled={!canEdit || booking.status === 'CANCELED'} aria-label="កែប្រែ"><Pencil /></Button><Button variant="ghost" size="icon" className="text-red-600" onClick={() => setCanceling(booking)} disabled={!canEdit || booking.status === 'CANCELED'} aria-label="លុបចោល"><Trash2 /></Button></div>
               </article>)}
             </div>
           )}
         </section>
+        </>}
       </div>
 
-      {editing && <EditPanel booking={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setBookings((items) => items.map((item) => item.bookingId === saved.bookingId ? saved : item)); setEditing(null); }} />}
-      {canceling && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"><div className="mb-4 grid size-11 place-items-center rounded-xl bg-red-50 text-red-600"><Trash2 /></div><h2 className="font-bold">លុបចោលការកក់នេះ?</h2><p className="mt-2 text-sm text-slate-600">Calendar Event នឹងត្រូវលុប ហើយ Telegram នឹងបង្ហាញថាបានលុបចោល។ កំណត់ត្រានៅ Sheet នឹងរក្សាទុកសម្រាប់ប្រវត្តិ។</p><div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={() => setCanceling(null)}>ត្រឡប់</Button><Button variant="destructive" onClick={() => void cancel()}>លុបចោល</Button></div></div></div>}
+      {canEdit && editing && <EditPanel booking={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setBookings((items) => items.map((item) => item.bookingId === saved.bookingId ? saved : item)); setEditing(null); }} />}
+      {canEdit && canceling && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"><div className="mb-4 grid size-11 place-items-center rounded-xl bg-red-50 text-red-600"><Trash2 /></div><h2 className="font-bold">លុបចោលការកក់នេះ?</h2><p className="mt-2 text-sm text-slate-600">Calendar Event នឹងត្រូវលុប ហើយ Telegram នឹងបង្ហាញថាបានលុបចោល។ កំណត់ត្រានៅ Sheet នឹងរក្សាទុកសម្រាប់ប្រវត្តិ។</p><div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={() => setCanceling(null)}>ត្រឡប់</Button><Button variant="destructive" onClick={() => void cancel()}>លុបចោល</Button></div></div></div>}
     </main>
   );
 }
@@ -258,10 +269,10 @@ async function adminFetch(input: RequestInfo | URL, init?: RequestInit) {
 }
 
 export function Dashboard() {
-  const [email, setEmail] = useState<string | null>(null);
+  const [user, setUser] = useState<DashboardUser | null>(null);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState('');
-  const signedIn = useCallback((value: string) => { setEmail(value); setError(''); }, []);
+  const signedIn = useCallback(() => window.location.reload(), []);
 
   useEffect(() => {
     let active = true;
@@ -269,13 +280,13 @@ export function Dashboard() {
       try {
         const response = await fetch('/api/auth/session', { cache: 'no-store' });
         if (!response.ok) throw new Error('មិនអាចពិនិត្យ Login បាន។ សូម Refresh ទំព័រ');
-        const result = await response.json() as { email: string | null };
-        if (active) { setEmail(result.email); setError(''); }
+        const result = await response.json() as { email: string | null; user?: DashboardUser };
+        if (active) { setUser(result.user || null); setError(''); }
       } catch (reason) {
-        if (active) { setEmail(null); setError(reason instanceof Error ? reason.message : 'មិនអាចភ្ជាប់បាន'); }
+        if (active) { setUser(null); setError(reason instanceof Error ? reason.message : 'មិនអាចភ្ជាប់បាន'); }
       } finally { if (active) setChecking(false); }
     }
-    const expire = () => setEmail(null);
+    const expire = () => setUser(null);
     void check();
     const timer = window.setInterval(() => void check(), 60000);
     window.addEventListener('ksfh-session-expired', expire);
@@ -287,13 +298,13 @@ export function Dashboard() {
       const response = await fetch('/api/auth/session', { method: 'DELETE' });
       if (!response.ok) throw new Error('មិនអាចចាកចេញបាន។ សូមព្យាយាមម្ដងទៀត');
       window.google?.accounts.id.disableAutoSelect();
-      setEmail(null);
+      setUser(null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'មិនអាចចាកចេញបាន'); }
   }
 
   if (checking) return <main className="grid min-h-screen place-items-center bg-slate-50 text-sm text-slate-600">កំពុងពិនិត្យ Login…</main>;
   return <>
     {error && <div className="border-b bg-red-50 p-3 text-center text-sm text-red-700" role="alert">{error} <button className="underline" onClick={() => window.location.reload()}>Refresh</button></div>}
-    {email ? <DashboardContent email={email} onSignOut={() => void signOut()} /> : <GoogleLogin onSignedIn={signedIn} />}
+    {user ? <DashboardContent user={user} onSignOut={() => void signOut()} /> : <GoogleLogin onSignedIn={signedIn} />}
   </>;
 }
