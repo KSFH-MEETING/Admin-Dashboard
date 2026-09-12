@@ -10,7 +10,7 @@ Web application សម្រាប់ស្នើសុំ និងគ្រប
 - Google Sheets — Database ក្នុង Tab `Bookings`
 - Google Calendar — Calendar Event សម្រាប់ការកក់ដែលបានបញ្ជាក់
 - Telegram Bot API — សារជូនដំណឹងទៅ Group
-- Cloudflare Access — Login និងអនុញ្ញាតតែ Admin
+- Sign in with Google — Login និងអនុញ្ញាតតែ Admin តាម ADMIN_EMAILS
 
 ## ដំណើរការ Booking
 
@@ -45,8 +45,7 @@ npm run dev
 - `TELEGRAM_BOT_TOKEN` — Secret និងត្រូវប្រើ Token ថ្មីដែលបាន Rotate
 - `TELEGRAM_CHAT_ID`
 - `TELEGRAM_TOPIC_ID` — ទុកទទេ បើ Group មិនប្រើ Topic
-- `CF_ACCESS_TEAM_DOMAIN`
-- `CF_ACCESS_AUD` — Secret
+- `GOOGLE_CLIENT_ID` — Public OAuth client ID (configured in `wrangler.jsonc`)
 
 តម្លៃ Google Sheet ID, Sheet name, Calendar ID និង Admin email មានក្នុង `wrangler.jsonc` រួចហើយ។ Share Google Sheet និង Google Calendar ទៅអ៊ីមែល Service Account ជា Editor មុន Deploy។
 
@@ -54,10 +53,13 @@ npm run dev
 
 ```powershell
 npx wrangler login
-npx @vinext/cloudflare deploy
+npm run build
+npx wrangler deploy --config dist/server/wrangler.json
 ```
 
-បន្ទាប់ពី Deploy ត្រូវបង្កើត Cloudflare Access Self-hosted Application សម្រាប់ `/dashboard*` និង `/api/admin/*` ហើយអនុញ្ញាត `komchay8@gmail.com`។ ទុក `/request` និង `/api/bookings` ជា Public។ បិទ public `workers.dev` route ប្រសិនបើប្រើ Custom Domain ដើម្បីកុំឱ្យរំលង Access policy។
+Google Auth Platform → Clients → Web application: set Authorized JavaScript origins to `https://ksfh-meeting.ksfh-meeting.workers.dev` (no path). Use the Google Identity Services popup callback; no redirect URI or client secret is needed. `/dashboard` shows Sign in with Google. Backend verifies Google signature, issuer, audience, expiry, verified email, and `ADMIN_EMAILS` on every admin request. Sessions use a Secure, HttpOnly, SameSite=Strict cookie and expire with the Google token (at most one hour); sign out clears the browser cookie. Login uses a browser nonce and all mutations require the same Origin. No Cloudflare Access subscription is needed. `/request` and `/api/bookings` remain public. Local development also requires authentication; add the exact local origin to the OAuth client when testing locally.
+
+Auth regression tests: `npm run test:auth`.
 
 ## សុវត្ថិភាព
 

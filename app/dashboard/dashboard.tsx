@@ -1,5 +1,6 @@
 'use client';
 
+import { GoogleLogin } from './google-login';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CalendarCheck, CalendarDays, CircleAlert, Clock3, ExternalLink, LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2, UsersRound, X } from 'lucide-react';
@@ -72,7 +73,7 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
       notes: data.get('notes'), telegramInitData: '',
     };
     try {
-      const response = await fetch(`/api/admin/bookings/${encodeURIComponent(booking.bookingId)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const response = await adminFetch(`/api/admin/bookings/${encodeURIComponent(booking.bookingId)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const result = await response.json() as { booking?: Booking; message?: string };
       if (!response.ok || !result.booking) throw new Error(result.message || 'មិនអាចរក្សាទុកបាន');
       onSaved(result.booking);
@@ -114,7 +115,7 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
   );
 }
 
-export function Dashboard() {
+function DashboardContent({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -127,7 +128,7 @@ export function Dashboard() {
   const load = useCallback(async (throwOnError = false) => {
     setLoading(true); setMessage('');
     try {
-      const response = await fetch('/api/admin/bookings', { cache: 'no-store' });
+      const response = await adminFetch('/api/admin/bookings', { cache: 'no-store' });
       const result = await response.json() as ApiList;
       if (!response.ok) throw new Error(result.message || 'មិនអាចអានទិន្នន័យបាន');
       const items = result.bookings || [];
@@ -147,7 +148,7 @@ export function Dashboard() {
   }, [load]);
 
   async function cancelById(id: string) {
-    const response = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const response = await adminFetch(`/api/admin/bookings/${encodeURIComponent(id)}`, { method: 'DELETE' });
     const result = await response.json() as { booking?: Booking; message?: string };
     if (!response.ok || !result.booking) throw new Error(result.message || 'មិនអាចលុបចោលបាន');
     setBookings((items) => items.map((item) => item.bookingId === result.booking?.bookingId ? result.booking : item));
@@ -165,7 +166,7 @@ export function Dashboard() {
     const id = typeof data.bookingId === 'string' ? data.bookingId : '';
     const current = bookings.find((item) => item.bookingId === id);
     if (!current) throw new Error('Booking not found in the current dashboard.');
-    const response = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}`, {
+    const response = await adminFetch(`/api/admin/bookings/${encodeURIComponent(id)}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...current, ...data, requestId: current.requestId, technicalStaff: current.technicalStaff, equipment: current.equipment, telegramInitData: '' }),
     });
@@ -203,7 +204,7 @@ export function Dashboard() {
       <header className="border-b bg-[#075d45] text-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl bg-white/12"><LayoutDashboard /></div><div><p className="text-xs text-emerald-100">KSFH Meeting</p><h1 className="font-bold">ផ្ទាំងគ្រប់គ្រង</h1></div></div>
-          <Link href="/request" target="_blank"><Button variant="secondary"><Plus /> Form ស្នើសុំ <ExternalLink className="size-3" /></Button></Link>
+          <div className="flex flex-wrap items-center justify-end gap-2"><span className="text-xs text-emerald-100">{email}</span><Button variant="secondary" onClick={onSignOut}>ចាកចេញ</Button><Link href="/request" target="_blank"><Button variant="secondary"><Plus /> Form ស្នើសុំ <ExternalLink className="size-3" /></Button></Link></div>
         </div>
       </header>
 
@@ -247,4 +248,52 @@ export function Dashboard() {
       {canceling && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"><div className="mb-4 grid size-11 place-items-center rounded-xl bg-red-50 text-red-600"><Trash2 /></div><h2 className="font-bold">លុបចោលការកក់នេះ?</h2><p className="mt-2 text-sm text-slate-600">Calendar Event នឹងត្រូវលុប ហើយ Telegram នឹងបង្ហាញថាបានលុបចោល។ កំណត់ត្រានៅ Sheet នឹងរក្សាទុកសម្រាប់ប្រវត្តិ។</p><div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={() => setCanceling(null)}>ត្រឡប់</Button><Button variant="destructive" onClick={() => void cancel()}>លុបចោល</Button></div></div></div>}
     </main>
   );
+}
+
+
+async function adminFetch(input: RequestInfo | URL, init?: RequestInit) {
+  const response = await fetch(input, init);
+  if (response.status === 401 || response.status === 403) window.dispatchEvent(new Event('ksfh-session-expired'));
+  return response;
+}
+
+export function Dashboard() {
+  const [email, setEmail] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [error, setError] = useState('');
+  const signedIn = useCallback((value: string) => { setEmail(value); setError(''); }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function check() {
+      try {
+        const response = await fetch('/api/auth/session', { cache: 'no-store' });
+        if (!response.ok) throw new Error('មិនអាចពិនិត្យ Login បាន។ សូម Refresh ទំព័រ');
+        const result = await response.json() as { email: string | null };
+        if (active) { setEmail(result.email); setError(''); }
+      } catch (reason) {
+        if (active) { setEmail(null); setError(reason instanceof Error ? reason.message : 'មិនអាចភ្ជាប់បាន'); }
+      } finally { if (active) setChecking(false); }
+    }
+    const expire = () => setEmail(null);
+    void check();
+    const timer = window.setInterval(() => void check(), 60000);
+    window.addEventListener('ksfh-session-expired', expire);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('ksfh-session-expired', expire); };
+  }, []);
+
+  async function signOut() {
+    try {
+      const response = await fetch('/api/auth/session', { method: 'DELETE' });
+      if (!response.ok) throw new Error('មិនអាចចាកចេញបាន។ សូមព្យាយាមម្ដងទៀត');
+      window.google?.accounts.id.disableAutoSelect();
+      setEmail(null);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'មិនអាចចាកចេញបាន'); }
+  }
+
+  if (checking) return <main className="grid min-h-screen place-items-center bg-slate-50 text-sm text-slate-600">កំពុងពិនិត្យ Login…</main>;
+  return <>
+    {error && <div className="border-b bg-red-50 p-3 text-center text-sm text-red-700" role="alert">{error} <button className="underline" onClick={() => window.location.reload()}>Refresh</button></div>}
+    {email ? <DashboardContent email={email} onSignOut={() => void signOut()} /> : <GoogleLogin onSignedIn={signedIn} />}
+  </>;
 }

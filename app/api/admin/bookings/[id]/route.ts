@@ -1,11 +1,12 @@
 import { cancelBookingById, ConflictError, NotFoundError, updateBookingById } from '@/lib/server/booking-service';
+import { AuthError } from '@/lib/server/google-identity';
 import { requireAdmin } from '@/lib/server/admin-auth';
 
 type Context = { params: Promise<{ id: string }> };
 
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : 'មានបញ្ហាមិនស្គាល់';
-  const status = error instanceof ConflictError ? 409 : error instanceof NotFoundError ? 404 : 502;
+  const status = error instanceof AuthError ? error.status : error instanceof ConflictError ? 409 : error instanceof NotFoundError ? 404 : 502;
   return Response.json({ message }, { status });
 }
 
