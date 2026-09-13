@@ -4,6 +4,7 @@ import { dashboardFetch as adminFetch } from '@/lib/dashboard-fetch';
 import { Modal } from './modal';
 import { ReportsPanel } from './reports-panel';
 import { UsersPanel } from './users-panel';
+import { CalendarSyncPanel } from './calendar-sync-panel';
 import { userCan, type DashboardUser } from '@/lib/server/user-policy';
 import { GoogleLogin } from './google-login';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -119,7 +120,7 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
 function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user: DashboardUser; onSignOut: () => void; signingOut: boolean; guest?: boolean }) {
   const { email } = user;
   const canEdit = userCan(user, 'bookings');
-  const [view, setView] = useState<'bookings' | 'users' | 'reports' | 'inventory'>('bookings');
+  const [view, setView] = useState<'bookings' | 'users' | 'reports' | 'calendar-sync' | 'inventory'>('bookings');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -143,7 +144,7 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
   useEffect(() => {
     const navigate = () => {
       const hash = window.location.hash.slice(1);
-      setView(hash === 'reports' || hash === 'inventory' || (hash === 'users' && user.role === 'owner') ? hash : 'bookings');
+      setView(hash === 'reports' || hash === 'inventory' || ((hash === 'users' || hash === 'calendar-sync') && user.role === 'owner') ? hash : 'bookings');
     };
     navigate(); window.addEventListener('hashchange', navigate);
     return () => window.removeEventListener('hashchange', navigate);
@@ -238,10 +239,10 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <nav className="mb-5 flex flex-wrap gap-2 print:hidden" aria-label="ផ្នែក Dashboard">
-          {([{ key: 'bookings', label: '📅 ការកក់' }, { key: 'reports', label: '📊 របាយការណ៍' }, ...(user.role === 'owner' ? [{ key: 'users', label: '👥 អ្នកប្រើ' }] : []), { key: 'inventory', label: '📦 Inventory' }] as { key: typeof view; label: string }[]).map((item) => <Button key={item.key} aria-current={view === item.key ? 'page' : undefined} variant={view === item.key ? 'default' : 'outline'} onClick={() => { window.location.hash = item.key; setView(item.key); setNotice(''); }}>{item.label}</Button>)}
+          {([{ key: 'bookings', label: '📅 ការកក់' }, { key: 'reports', label: '📊 របាយការណ៍' }, ...(user.role === 'owner' ? [{ key: 'calendar-sync', label: '🔄 Calendar Sync' }, { key: 'users', label: '👥 អ្នកប្រើ' }] : []), { key: 'inventory', label: '📦 Inventory' }] as { key: typeof view; label: string }[]).map((item) => <Button key={item.key} aria-current={view === item.key ? 'page' : undefined} variant={view === item.key ? 'default' : 'outline'} onClick={() => { window.location.hash = item.key; setView(item.key); setNotice(''); }}>{item.label}</Button>)}
         </nav>
         {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
-        {view === 'inventory' ? <section aria-label="Inventory" className="min-h-[60vh] rounded-2xl border bg-white" /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : <>
+        {view === 'inventory' ? <section aria-label="Inventory" className="min-h-[60vh] rounded-2xl border bg-white" /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : view === 'calendar-sync' && user.role === 'owner' ? <CalendarSyncPanel /> : <>
         {!canEdit && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm leading-7 text-blue-800">{guest ? '🌐 Guest mode — អ្នកកំពុងមើល Dashboard សាធារណៈ។ អ្នកអាចមើលព័ត៌មានការកក់គ្រប់ផ្នែក និងរបាយការណ៍ ប៉ុន្តែមិនអាចកែ ឬលុបបាន។' : '👁️ សិទ្ធិមើលតែប៉ុណ្ណោះ — អ្នកអាចមើល និងស្វែងរកការកក់។'}</p>}
         {message && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4" />{message}</div>}
         {!configured && <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-bold text-amber-950">Backend មិនទាន់បានភ្ជាប់</h2><p className="mt-1 text-sm text-amber-800">កូដរួចរាល់ ប៉ុន្តែត្រូវបញ្ចូល Google Service Account និង Secrets នៅ Cloudflare មុនទទួលទិន្នន័យពិត។</p><Link href="/setup" className="mt-3 inline-block text-sm font-bold text-amber-900 underline">មើលវិធីភ្ជាប់</Link></div>}

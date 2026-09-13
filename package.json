@@ -11,7 +11,7 @@
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint app lib",
     "format": "oxfmt",
-    "test:auth": "node --experimental-strip-types --test tests/google-auth.test.mjs tests/dashboard-users.test.mjs tests/permission-boundaries.test.mjs tests/public-booking.test.mjs tests/booking-reports.test.mjs"
+    "test:auth": "node --experimental-strip-types --test tests/google-auth.test.mjs tests/dashboard-users.test.mjs tests/permission-boundaries.test.mjs tests/public-booking.test.mjs tests/booking-reports.test.mjs tests/calendar-sync.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

@@ -3,6 +3,15 @@ import { optionalEnv, requiredEnv } from './env';
 import { bookingToRow, rowToBooking, SHEET_HEADERS, type Booking } from './types';
 
 type TokenCache = { token: string; expiresAt: number } | null;
+export type GoogleCalendarEvent = {
+  id?: string;
+  status?: string;
+  summary?: string;
+  location?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  extendedProperties?: { private?: Record<string, string> };
+};
 let tokenCache: TokenCache = null;
 let sheetReady = false;
 
@@ -47,20 +56,27 @@ async function accessToken(): Promise<string> {
 }
 
 export async function googleFetch(url: string, init?: RequestInit, accepted: number[] = []): Promise<Response> {
-  const headers = new Headers(init?.headers);
-  headers.set('Authorization', `Bearer ${await accessToken()}`);
-  headers.set('Content-Type', 'application/json');
-  const response = await fetch(url, {
-    ...init,
-    headers,
-  });
-  if (!response.ok && !accepted.includes(response.status)) {
+  const retryDelays = [0, 500, 1_500];
+  let lastError: Error | null = null;
+  for (const delay of retryDelays) {
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+    const headers = new Headers(init?.headers);
+    headers.set('Authorization', `Bearer ${await accessToken()}`);
+    headers.set('Content-Type', 'application/json');
+    let response: Response;
+    try { response = await fetch(url, { ...init, headers }); }
+    catch (error) {
+      lastError = error instanceof Error ? error : new Error('Google network request failed');
+      continue;
+    }
+    if (response.ok || accepted.includes(response.status)) return response;
     const body = await response.text();
     let message = body;
     try { message = (JSON.parse(body) as { error?: { message?: string } }).error?.message || body; } catch { /* text response */ }
-    throw new Error(`Google API: ${message || response.statusText}`);
+    lastError = new Error(`Google API: ${message || response.statusText}`);
+    if (![429, 500, 502, 503, 504].includes(response.status)) throw lastError;
   }
-  return response;
+  throw lastError || new Error('Google API request failed');
 }
 
 const sheetId = () => requiredEnv('GOOGLE_SHEET_ID');
@@ -83,16 +99,20 @@ export async function ensureBookingSheet() {
 }
 
 export async function listBookings(): Promise<Booking[]> {
+  return (await listBookingRows()).map((item) => item.booking);
+}
+
+export async function listBookingRows(): Promise<{ booking: Booking; rowNumber: number }[]> {
   await ensureBookingSheet();
   const response = await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId())}/values/${sheetRange('A2:W')}`);
   const result = await response.json() as { values?: unknown[][] };
-  return (result.values || []).filter((row) => row[0]).map(rowToBooking);
+  return (result.values || []).map((row, index) => ({ row, rowNumber: index + 2 })).filter((item) => item.row[0]).map((item) => ({ booking: rowToBooking(item.row), rowNumber: item.rowNumber }));
 }
 
 export async function findBooking(value: string, key: 'bookingId' | 'requestId' = 'bookingId') {
-  const bookings = await listBookings();
-  const booking = bookings.find((item) => item[key] === value) || null;
-  return { booking, rowNumber: booking ? bookings.findIndex((item) => item[key] === value) + 2 : -1 };
+  const rows = await listBookingRows();
+  const found = rows.find((item) => item.booking[key] === value);
+  return found || { booking: null, rowNumber: -1 };
 }
 
 export async function appendBooking(booking: Booking) {
@@ -116,11 +136,59 @@ function calendarUrl(eventId = '') {
   return `https://www.googleapis.com/calendar/v3/calendars/${calendar}/events${eventId ? `/${encodeURIComponent(eventId)}` : ''}`;
 }
 
+function nextMonth(month: string) {
+  const [year, value] = month.split('-').map(Number);
+  const date = new Date(Date.UTC(year, value, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+export async function listCalendarEventsForMonth(month: string): Promise<GoogleCalendarEvent[]> {
+  const events: GoogleCalendarEvent[] = [];
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({
+      timeMin: `${month}-01T00:00:00+07:00`,
+      timeMax: `${nextMonth(month)}-01T00:00:00+07:00`,
+      singleEvents: 'true', showDeleted: 'false', maxResults: '2500',
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const response = await googleFetch(`${calendarUrl()}?${params}`);
+    const result = await response.json() as { items?: GoogleCalendarEvent[]; nextPageToken?: string };
+    events.push(...(result.items || []));
+    pageToken = result.nextPageToken || '';
+  } while (pageToken);
+  return events;
+}
+
+export async function getCalendarEvent(eventId: string): Promise<GoogleCalendarEvent | null> {
+  if (!eventId) return null;
+  const response = await googleFetch(calendarUrl(eventId), undefined, [404, 410]);
+  if (!response.ok) return null;
+  const event = await response.json() as GoogleCalendarEvent;
+  return event.status === 'cancelled' ? null : event;
+}
+
 export async function ensureCalendarEvent(booking: Booking) {
-  const response = await googleFetch(calendarUrl(), { method: 'POST', body: JSON.stringify(calendarEventBody(booking)) }, [409]);
-  if (response.status === 409) return booking.googleEventId;
-  const result = await response.json() as { id?: string };
-  return result.id || booking.googleEventId;
+  const candidates = [
+    booking.googleEventId,
+    await deterministicEventId(booking.requestId),
+    await deterministicEventId(`${booking.requestId}|${booking.date}|sync-v2`),
+    await deterministicEventId(`${booking.requestId}|${booking.date}|sync-v3`),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+  for (const eventId of candidates) {
+    const candidate = { ...booking, googleEventId: eventId };
+    const response = await googleFetch(calendarUrl(), { method: 'POST', body: JSON.stringify(calendarEventBody(candidate)) }, [409]);
+    if (response.status !== 409) {
+      const result = await response.json() as { id?: string };
+      return result.id || eventId;
+    }
+    const existing = await getCalendarEvent(eventId);
+    if (existing?.extendedProperties?.private?.requestId === booking.requestId) {
+      await updateCalendarEvent(candidate);
+      return eventId;
+    }
+  }
+  throw new Error(`Calendar Event ID conflict: ${booking.bookingId}`);
 }
 
 export async function updateCalendarEvent(booking: Booking) {

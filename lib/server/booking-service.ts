@@ -1,4 +1,4 @@
-import { appendBooking, cancelCalendarEvent, deterministicEventId, ensureCalendarEvent, findBooking, listBookings, updateBooking, updateCalendarEvent } from './google';
+import { appendBooking, cancelCalendarEvent, deterministicEventId, ensureCalendarEvent, findBooking, getCalendarEvent, listBookings, updateBooking, updateCalendarEvent } from './google';
 import { sendBookingMessage, updateBookingMessage, verifyTelegramInitData } from './telegram';
 import type { Booking } from './types';
 import { overlaps, validateBookingInput } from './validation';
@@ -74,7 +74,11 @@ export async function updateBookingById(id: string, raw: unknown) {
   await assertAvailable(booking, id);
   await updateBooking(found.rowNumber, booking);
   try {
-    await updateCalendarEvent(booking);
+    if (booking.googleEventId && await getCalendarEvent(booking.googleEventId)) await updateCalendarEvent(booking);
+    else {
+      booking.googleEventId = await deterministicEventId(booking.requestId);
+      booking.googleEventId = await ensureCalendarEvent(booking);
+    }
     booking.telegramMessageId = await updateBookingMessage(booking, 'updated');
     booking.status = 'CONFIRMED';
     booking.updatedAt = new Date().toISOString();
