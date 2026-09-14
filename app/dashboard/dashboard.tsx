@@ -5,6 +5,7 @@ import { Modal } from './modal';
 import { ReportsPanel } from './reports-panel';
 import { UsersPanel } from './users-panel';
 import { CalendarSyncPanel } from './calendar-sync-panel';
+import { RoomCalendarModal } from './room-calendar-modal';
 import { userCan, type DashboardUser } from '@/lib/server/user-policy';
 import { GoogleLogin } from './google-login';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -141,6 +142,7 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const [notice, setNotice] = useState('');
+  const [calendarOpen, setCalendarOpen] = useState(false);
   useEffect(() => {
     const navigate = () => {
       const hash = window.location.hash.slice(1);
@@ -240,6 +242,7 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <nav className="mb-5 flex flex-wrap gap-2 print:hidden" aria-label="ផ្នែក Dashboard">
           {([{ key: 'bookings', label: '📅 ការកក់' }, { key: 'reports', label: '📊 របាយការណ៍' }, ...(user.role === 'owner' ? [{ key: 'calendar-sync', label: '🔄 Calendar Sync' }, { key: 'users', label: '👥 អ្នកប្រើ' }] : []), { key: 'inventory', label: '📦 Inventory' }] as { key: typeof view; label: string }[]).map((item) => <Button key={item.key} aria-current={view === item.key ? 'page' : undefined} variant={view === item.key ? 'default' : 'outline'} onClick={() => { window.location.hash = item.key; setView(item.key); setNotice(''); }}>{item.label}</Button>)}
+          <Button variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>📅 ប្រតិទិនកក់បន្ទប់</Button>
         </nav>
         {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
         {view === 'inventory' ? <section aria-label="Inventory" className="min-h-[60vh] rounded-2xl border bg-white" /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : view === 'calendar-sync' && user.role === 'owner' ? <CalendarSyncPanel /> : <>
@@ -285,6 +288,7 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
       </div>
 
       {canEdit && editing && <EditPanel booking={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setBookings((items) => items.map((item) => item.bookingId === saved.bookingId ? saved : item)); setEditing(null); setNotice('✅ បានរក្សាទុកការកែប្រែ។'); }} />}
+      {calendarOpen && <RoomCalendarModal onClose={() => setCalendarOpen(false)} />}
       {details && <Modal title="📅 ព័ត៌មានលម្អិតការកក់" onClose={() => setDetails(null)}><div className="space-y-5 p-5"><div><Status value={details.status} /><h3 className="mt-3 break-words text-xl font-bold leading-8">{details.title}</h3><p className="mt-1 text-xs text-slate-500">{details.bookingId}</p></div><dl className="grid gap-4 sm:grid-cols-2">{[
         ['📅 កាលបរិច្ឆេទ', details.date], ['🕒 ម៉ោងកម្ពុជា', details.startTime + '–' + details.endTime], ['📍 បន្ទប់', details.room], ['🏢 ផ្នែក', details.department], ['👤 អ្នកសម្របសម្រួល', details.coordinator], ['☎️ លេខទូរស័ព្ទ', details.phone], ['👥 អ្នកចូលរួម', String(details.attendees)], ['🛠️ បុគ្គលិកបច្ចេកទេស', details.technicalStaff.join(', ')], ['🎤 សម្ភារៈ', details.equipment.join(', ')], ['📝 កំណត់ចំណាំ', details.notes],
       ].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{value || '—'}</dd></div>)}</dl>{details.error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{details.error}</p>}<div className="flex flex-wrap justify-end gap-2 border-t pt-4"><Button variant="outline" onClick={() => setDetails(null)}>ត្រឡប់</Button>{canEdit && details.status !== 'CANCELED' && <Button onClick={() => { setEditing(details); setDetails(null); }}>✏️ កែប្រែការកក់</Button>}</div></div></Modal>}
