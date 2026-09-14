@@ -1,10 +1,10 @@
 'use client';
 
-import { ChevronDown, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ROOMS, TIME_ZONE } from '@/lib/meeting-config';
 import { getRoomAvailability } from '@/lib/room-availability';
 import type { Booking } from '@/lib/server/types';
+import { Modal } from './modal';
 
 function cambodiaDateTime(now: Date) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -35,28 +35,11 @@ export function TodayRoomAvailability({
 }) {
   const [now, setNow] = useState(() => new Date());
   const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const closeOnOutsideClick = (event: PointerEvent) => {
-      if (!container.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOnOutsideClick);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsideClick);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [open]);
 
   const clock = cambodiaDateTime(now);
   const rooms = useMemo(
@@ -105,67 +88,48 @@ export function TodayRoomAvailability({
   };
 
   return (
-    <div ref={container} className="relative shrink-0">
+    <div className="shrink-0">
       <button
         type="button"
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        aria-controls="today-room-popover"
         disabled={loading}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(true)}
         className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
       >
         <span>🏢 {loading ? 'កំពុងពិនិត្យ…' : `${availableRooms.length}/${ROOMS.length} ទំនេរ`}</span>
-        <ChevronDown className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
 
       {open && (
-        <section
-          id="today-room-popover"
-          aria-labelledby="today-room-popover-title"
-          className="absolute right-0 top-12 z-40 w-[min(44rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
-        >
-          <header className="flex items-start justify-between gap-3 border-b bg-emerald-50/70 p-4">
-            <div>
-              <h2 id="today-room-popover-title" className="font-bold text-slate-900">
-                🏢 បន្ទប់ទំនេរថ្ងៃនេះ
-              </h2>
-              <p className="mt-1 text-xs text-slate-600">
-                ម៉ោងកម្ពុជា {clock.time} · {freeAllDay} បន្ទប់ទំនេរពេញថ្ងៃ
-              </p>
+        <Modal title="🏢 បន្ទប់ទំនេរថ្ងៃនេះ" onClose={() => setOpen(false)}>
+          <div id="today-room-availability-dialog" className="p-5">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-emerald-50 p-4">
+              <p className="text-sm text-emerald-900">ម៉ោងកម្ពុជា <strong>{clock.time}</strong></p>
+              <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                <span className="rounded-full bg-emerald-700 px-3 py-1.5 text-white">{availableRooms.length}/{ROOMS.length} ទំនេរឥឡូវ</span>
+                <span className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-emerald-800">{freeAllDay} ទំនេរពេញថ្ងៃ</span>
+              </div>
             </div>
-            <button
-              type="button"
-              aria-label="បិទព័ត៌មានបន្ទប់"
-              onClick={() => setOpen(false)}
-              className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-white"
-            >
-              <X className="size-4" />
-            </button>
-          </header>
 
-          <div className="grid max-h-[65vh] overflow-y-auto md:grid-cols-2">
-            <section aria-label="បន្ទប់ទំនេរ" className="p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="font-semibold text-emerald-800">🟢 អាចកក់បាន</h3>
-                <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                  {availableRooms.length}
-                </span>
-              </div>
-              <div className="space-y-2">{availableRooms.map(roomRow)}</div>
-            </section>
+            <div className="grid gap-6 md:grid-cols-2">
+              <section aria-label="បន្ទប់ទំនេរ">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="font-semibold text-emerald-800">🟢 អាចកក់បាន</h3>
+                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">{availableRooms.length}</span>
+                </div>
+                <div className="space-y-2">{availableRooms.map(roomRow)}</div>
+              </section>
 
-            <section aria-label="បន្ទប់កំពុងប្រើ" className="border-t p-4 md:border-l md:border-t-0">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="font-semibold text-red-800">🔴 កំពុងប្រើ</h3>
-                <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">
-                  {busyRooms.length}
-                </span>
-              </div>
-              <div className="space-y-2">{busyRooms.map(roomRow)}</div>
-            </section>
+              <section aria-label="បន្ទប់កំពុងប្រើ" className="border-t pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="font-semibold text-red-800">🔴 កំពុងប្រើ</h3>
+                  <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">{busyRooms.length}</span>
+                </div>
+                <div className="space-y-2">{busyRooms.map(roomRow)}</div>
+              </section>
+            </div>
           </div>
-        </section>
+        </Modal>
       )}
     </div>
   );
