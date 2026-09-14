@@ -335,9 +335,7 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
           <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="mb-4 grid size-10 place-items-center rounded-xl bg-orange-50 text-orange-700"><UsersRound className="size-5" /></div><p className="text-sm text-slate-500">អ្នកចូលរួមសរុប</p><p className="mt-1 text-3xl font-bold text-slate-900">{loading ? '…' : active.reduce((sum, item) => sum + item.attendees, 0)}</p></div>
         </section>
 
-        <TodayRoomAvailability bookings={bookings} loading={loading || !configured || !!message} onSelectRoom={selectRoomToday} />
-
-        <section id="booking-list" aria-labelledby="booking-list-title" className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <section id="booking-list" aria-labelledby="booking-list-title" className="rounded-2xl border bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 ref={listHeading} id="booking-list-title" tabIndex={-1} className="scroll-mt-5 font-bold outline-none">បញ្ជីការកក់បន្ទប់ · {periodLabel}</h2><output className="text-xs text-slate-500">{visible.length} កំណត់ត្រា</output></div>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
@@ -345,6 +343,7 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
               <NativeSelect aria-label="ថ្ងៃការកក់" value={period} onChange={(event) => { setPeriod(event.target.value); setPage(1); }} className="w-full sm:w-36 [&_select]:h-10"><NativeSelectOption value="all">គ្រប់ថ្ងៃ</NativeSelectOption><NativeSelectOption value="today">ថ្ងៃនេះ</NativeSelectOption><NativeSelectOption value="upcoming">នឹងមកដល់</NativeSelectOption></NativeSelect>
               <NativeSelect aria-label="ស្ថានភាពការកក់" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="w-full sm:w-44 [&_select]:h-10"><NativeSelectOption value="ACTIVE">សកម្ម</NativeSelectOption><NativeSelectOption value="ALL">ទាំងអស់</NativeSelectOption><NativeSelectOption value="CONFIRMED">បានបញ្ជាក់</NativeSelectOption><NativeSelectOption value="ERROR">មានបញ្ហា</NativeSelectOption><NativeSelectOption value="CANCELED">បានលុបចោល</NativeSelectOption></NativeSelect>
               <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : ''} /></Button>
+              <TodayRoomAvailability bookings={bookings} loading={loading || !configured || !!message} onSelectRoom={selectRoomToday} />
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-slate-50 px-4 py-3"><p className="text-xs text-slate-600">ម៉ោងកម្ពុជា · ចុចចំណងជើងការកក់ ដើម្បីមើលព័ត៌មានលម្អិត។</p><div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => { setPeriod('all'); setStatus('ACTIVE'); setQuery(''); setPage(1); }}>សម្អាតតម្រង</Button><a href="/request" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"><Plus className="size-4" />កក់បន្ទប់ថ្មី<ExternalLink className="size-3" /></a></div></div>
