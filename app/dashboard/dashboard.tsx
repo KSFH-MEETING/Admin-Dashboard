@@ -65,6 +65,28 @@ function Status({ value }: { value: string }) {
   return <Badge variant={variant} className={value === 'CONFIRMED' ? 'bg-emerald-700' : ''}>{statusText[value] || value}</Badge>;
 }
 
+function pageSequence(current: number, total: number) {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+  const pages: Array<number | string> = [1];
+  if (current > 3) pages.push('left-gap');
+  for (let page = Math.max(2, current - 1); page <= Math.min(total - 1, current + 1); page += 1) pages.push(page);
+  if (current < total - 2) pages.push('right-gap');
+  pages.push(total);
+  return pages;
+}
+
+function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (page: number) => void }) {
+  if (total <= 1) return null;
+  return <nav aria-label="ទំព័របញ្ជីការកក់" className="flex items-center gap-2">
+    <Button variant="outline" size="sm" disabled={page === 1} onClick={() => onChange(page - 1)} aria-label="ទំព័រមុន">← មុន</Button>
+    <span className="min-w-28 text-center text-sm font-medium sm:hidden">ទំព័រ {page} នៃ {total}</span>
+    <div className="hidden items-center gap-1 sm:flex">
+      {pageSequence(page, total).map((item) => typeof item === 'number' ? <Button key={item} variant={item === page ? 'default' : 'outline'} size="sm" className="min-w-9 px-2" aria-current={item === page ? 'page' : undefined} aria-label={`ទំព័រ ${item}`} onClick={() => onChange(item)}>{item}</Button> : <span key={item} className="px-1 text-slate-400" aria-hidden="true">…</span>)}
+    </div>
+    <Button variant="outline" size="sm" disabled={page === total} onClick={() => onChange(page + 1)} aria-label="ទំព័របន្ទាប់">បន្ទាប់ →</Button>
+  </nav>;
+}
+
 function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: () => void; onSaved: (booking: Booking) => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -129,10 +151,12 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('ACTIVE');
   const [period, setPeriod] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const periodLabel = period === 'today' ? 'ថ្ងៃនេះ' : period === 'upcoming' ? 'នឹងមកដល់' : 'គ្រប់ថ្ងៃ';
   function selectSummary(scope: string) {
-    setPeriod(scope); setStatus('ACTIVE'); setQuery('');
+    setPeriod(scope); setStatus('ACTIVE'); setQuery(''); setPage(1);
     listHeading.current?.focus({ preventScroll: true });
     listHeading.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
   }
@@ -219,6 +243,19 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
     const matchesPeriod = period === 'all' || (period === 'today' ? item.date === today : item.date > today);
     return matchesText && matchesStatus && matchesPeriod;
   }), [bookings, query, status, period, today]);
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = visible.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageEnd = Math.min(currentPage * pageSize, visible.length);
+  const pageBookings = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  function goToPage(nextPage: number) {
+    setPage(Math.max(1, Math.min(nextPage, totalPages)));
+    window.requestAnimationFrame(() => {
+      listHeading.current?.focus({ preventScroll: true });
+      listHeading.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+    });
+  }
 
   async function cancel() {
     if (!canceling || cancelBusy) return;
@@ -240,9 +277,9 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <nav className="mb-5 flex flex-wrap gap-2 print:hidden" aria-label="ផ្នែក Dashboard">
-          {([{ key: 'bookings', label: '📅 ការកក់' }, { key: 'reports', label: '📊 របាយការណ៍' }, ...(user.role === 'owner' ? [{ key: 'calendar-sync', label: '🔄 Calendar Sync' }, { key: 'users', label: '👥 អ្នកប្រើ' }] : []), { key: 'inventory', label: '📦 Inventory' }] as { key: typeof view; label: string }[]).map((item) => <Button key={item.key} aria-current={view === item.key ? 'page' : undefined} variant={view === item.key ? 'default' : 'outline'} onClick={() => { window.location.hash = item.key; setView(item.key); setNotice(''); }}>{item.label}</Button>)}
-          <Button variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>📅 ប្រតិទិនកក់បន្ទប់</Button>
+        <nav className="sticky top-0 z-30 -mx-4 mb-5 flex gap-2 overflow-x-auto border-b border-slate-200 bg-slate-50/95 px-4 py-3 shadow-sm backdrop-blur print:hidden sm:-mx-6 sm:px-6" aria-label="ផ្នែក Dashboard">
+          {([{ key: 'bookings', label: '📅 ការកក់' }, { key: 'reports', label: '📊 របាយការណ៍' }, ...(user.role === 'owner' ? [{ key: 'calendar-sync', label: '🔄 Calendar Sync' }, { key: 'users', label: '👥 អ្នកប្រើ' }] : []), { key: 'inventory', label: '📦 Inventory' }] as { key: typeof view; label: string }[]).map((item) => <Button className="shrink-0" key={item.key} aria-current={view === item.key ? 'page' : undefined} variant={view === item.key ? 'default' : 'outline'} onClick={() => { window.location.hash = item.key; setView(item.key); setNotice(''); }}>{item.label}</Button>)}
+          <Button className="shrink-0" variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>📅 ប្រតិទិនកក់បន្ទប់</Button>
         </nav>
         {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
         {view === 'inventory' ? <section aria-label="Inventory" className="min-h-[60vh] rounded-2xl border bg-white" /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : view === 'calendar-sync' && user.role === 'owner' ? <CalendarSyncPanel /> : <>
@@ -264,16 +301,16 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 ref={listHeading} id="booking-list-title" tabIndex={-1} className="scroll-mt-5 font-bold outline-none">បញ្ជីការកក់បន្ទប់ · {periodLabel}</h2><output className="text-xs text-slate-500">{visible.length} កំណត់ត្រា</output></div>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-              <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input aria-label="ស្វែងរកការកក់" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ស្វែងរក…" className="h-10 pl-9 sm:w-64" /></div>
-              <NativeSelect aria-label="ថ្ងៃការកក់" value={period} onChange={(event) => setPeriod(event.target.value)} className="w-full sm:w-36 [&_select]:h-10"><NativeSelectOption value="all">គ្រប់ថ្ងៃ</NativeSelectOption><NativeSelectOption value="today">ថ្ងៃនេះ</NativeSelectOption><NativeSelectOption value="upcoming">នឹងមកដល់</NativeSelectOption></NativeSelect>
-              <NativeSelect aria-label="ស្ថានភាពការកក់" value={status} onChange={(event) => setStatus(event.target.value)} className="w-full sm:w-44 [&_select]:h-10"><NativeSelectOption value="ACTIVE">សកម្ម</NativeSelectOption><NativeSelectOption value="ALL">ទាំងអស់</NativeSelectOption><NativeSelectOption value="CONFIRMED">បានបញ្ជាក់</NativeSelectOption><NativeSelectOption value="ERROR">មានបញ្ហា</NativeSelectOption><NativeSelectOption value="CANCELED">បានលុបចោល</NativeSelectOption></NativeSelect>
+              <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input aria-label="ស្វែងរកការកក់" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="ស្វែងរក…" className="h-10 pl-9 sm:w-64" /></div>
+              <NativeSelect aria-label="ថ្ងៃការកក់" value={period} onChange={(event) => { setPeriod(event.target.value); setPage(1); }} className="w-full sm:w-36 [&_select]:h-10"><NativeSelectOption value="all">គ្រប់ថ្ងៃ</NativeSelectOption><NativeSelectOption value="today">ថ្ងៃនេះ</NativeSelectOption><NativeSelectOption value="upcoming">នឹងមកដល់</NativeSelectOption></NativeSelect>
+              <NativeSelect aria-label="ស្ថានភាពការកក់" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="w-full sm:w-44 [&_select]:h-10"><NativeSelectOption value="ACTIVE">សកម្ម</NativeSelectOption><NativeSelectOption value="ALL">ទាំងអស់</NativeSelectOption><NativeSelectOption value="CONFIRMED">បានបញ្ជាក់</NativeSelectOption><NativeSelectOption value="ERROR">មានបញ្ហា</NativeSelectOption><NativeSelectOption value="CANCELED">បានលុបចោល</NativeSelectOption></NativeSelect>
               <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : ''} /></Button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-slate-50 px-4 py-3"><p className="text-xs text-slate-600">ម៉ោងកម្ពុជា · ចុចចំណងជើងការកក់ ដើម្បីមើលព័ត៌មានលម្អិត។</p><div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => { setPeriod('all'); setStatus('ACTIVE'); setQuery(''); }}>សម្អាតតម្រង</Button><a href="/request" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"><Plus className="size-4" />កក់បន្ទប់ថ្មី<ExternalLink className="size-3" /></a></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-slate-50 px-4 py-3"><p className="text-xs text-slate-600">ម៉ោងកម្ពុជា · ចុចចំណងជើងការកក់ ដើម្បីមើលព័ត៌មានលម្អិត។</p><div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => { setPeriod('all'); setStatus('ACTIVE'); setQuery(''); setPage(1); }}>សម្អាតតម្រង</Button><a href="/request" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"><Plus className="size-4" />កក់បន្ទប់ថ្មី<ExternalLink className="size-3" /></a></div></div>
           {loading ? <div className="p-12 text-center text-sm text-slate-500">កំពុងទាញទិន្នន័យ…</div> : visible.length === 0 ? <div className="p-12 text-center"><CalendarDays className="mx-auto mb-3 size-9 text-slate-300" /><p className="font-medium">{bookings.length ? 'មិនមានលទ្ធផលតាមការស្វែងរក' : 'មិនទាន់មានការកក់'}</p><p className="mt-1 text-sm text-slate-500">{bookings.length ? 'សូមប្តូរពាក្យស្វែងរក ឬតម្រងស្ថានភាព។' : 'ការកក់ថ្មីនឹងបង្ហាញនៅទីនេះ'}</p></div> : (
             <div className="divide-y">
-              {visible.map((booking) => <article key={booking.bookingId} className="grid gap-3 p-4 transition hover:bg-slate-50 sm:grid-cols-[110px_minmax(0,1fr)_180px_130px_auto] sm:items-center">
+              {pageBookings.map((booking) => <article key={booking.bookingId} className="grid gap-3 p-4 transition hover:bg-slate-50 sm:grid-cols-[110px_minmax(0,1fr)_180px_130px_auto] sm:items-center">
                 <div><p className="font-bold text-slate-900">{booking.date}</p><p className="text-sm text-emerald-700">{booking.startTime}–{booking.endTime}</p></div>
                 <div className="min-w-0"><button onClick={() => setDetails(booking)} className="text-left font-semibold leading-7 text-emerald-800 underline-offset-4 hover:underline focus-visible:outline-2">{booking.title}<span className="mt-1 block text-xs font-normal text-slate-500">មើលព័ត៌មានលម្អិត →</span></button><p className="truncate text-sm text-slate-500">👤 {booking.coordinator} · 🏢 {booking.department}</p><p className="mt-1 text-xs text-slate-400">{booking.bookingId}</p></div>
                 <div><p className="text-sm font-medium">📍 {booking.room}</p><p className="text-xs text-slate-500">👥 {booking.attendees || 0} នាក់</p></div>
@@ -282,6 +319,15 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
               </article>)}
             </div>
           )}
+          <div className="flex flex-col gap-3 border-t bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <output aria-live="polite">បង្ហាញ {pageStart}–{pageEnd} នៃ {visible.length}</output>
+              <label htmlFor="page-size" className="flex items-center gap-2">ក្នុងមួយទំព័រ
+                <NativeSelect id="page-size" aria-label="ចំនួនកំណត់ត្រាក្នុងមួយទំព័រ" value={String(pageSize)} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="w-24 [&_select]:h-9"><NativeSelectOption value="25">25</NativeSelectOption><NativeSelectOption value="50">50</NativeSelectOption><NativeSelectOption value="100">100</NativeSelectOption></NativeSelect>
+              </label>
+            </div>
+            <Pagination page={currentPage} total={totalPages} onChange={goToPage} />
+          </div>
         </section>
         </>}
         </>}
