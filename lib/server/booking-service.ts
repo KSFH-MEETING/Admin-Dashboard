@@ -1,10 +1,24 @@
 import { appendBooking, cancelCalendarEvent, deterministicEventId, ensureCalendarEvent, findBooking, getCalendarEvent, listBookings, updateBooking, updateCalendarEvent } from './google';
-import { sendBookingMessage, updateBookingMessage, verifyTelegramInitData } from './telegram';
+import { sendBookingMessage, updateBookingMessage, verifyTelegramInitData, type TelegramSyncResult } from './telegram';
 import type { Booking } from './types';
 import { overlaps, validateBookingInput } from './validation';
 
 export class ConflictError extends Error {}
 export class NotFoundError extends Error {}
+
+function applyTelegramResult(booking: Booking, result: TelegramSyncResult) {
+  booking.telegramMessageId = result.messageId;
+  booking.telegramChatId = result.chatId;
+  booking.telegramTopicId = result.topicId;
+  booking.telegramStatus = result.status;
+  booking.telegramUpdatedAt = result.updatedAt;
+}
+
+function recordTelegramFailure(booking: Booking, error: unknown) {
+  booking.telegramStatus = 'FAILED';
+  booking.telegramUpdatedAt = new Date().toISOString();
+  booking.error = (error instanceof Error ? error.message : 'Telegram integration error').slice(0, 500);
+}
 
 function bookingId(date: string, requestId: string) {
   return `KSFH-${date.replace(/-/g, '')}-${requestId.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase()}`;
@@ -30,6 +44,8 @@ export async function createBooking(raw: unknown) {
     status: 'PENDING', googleEventId: existing.booking?.googleEventId || await deterministicEventId(input.requestId),
     telegramMessageId: existing.booking?.telegramMessageId || '',
     telegramUserId: existing.booking?.telegramUserId || telegramUserId, error: '',
+    telegramChatId: existing.booking?.telegramChatId || '', telegramTopicId: existing.booking?.telegramTopicId || '',
+    telegramStatus: existing.booking?.telegramStatus || '', telegramUpdatedAt: existing.booking?.telegramUpdatedAt || '',
   };
   delete (booking as Booking & { telegramInitData?: string }).telegramInitData;
   await assertAvailable(booking, booking.bookingId);
@@ -46,11 +62,6 @@ export async function createBooking(raw: unknown) {
     booking.status = 'CALENDAR_CREATED';
     booking.updatedAt = new Date().toISOString();
     await updateBooking(rowNumber, booking);
-    if (!booking.telegramMessageId) booking.telegramMessageId = await sendBookingMessage(booking);
-    booking.status = 'CONFIRMED';
-    booking.updatedAt = new Date().toISOString();
-    await updateBooking(rowNumber, booking);
-    return booking;
   } catch (error) {
     booking.status = 'ERROR';
     booking.error = error instanceof Error ? error.message.slice(0, 500) : 'Unknown integration error';
@@ -58,6 +69,13 @@ export async function createBooking(raw: unknown) {
     if (rowNumber > 0) await updateBooking(rowNumber, booking).catch(() => undefined);
     throw error;
   }
+  try {
+    if (!booking.telegramMessageId) applyTelegramResult(booking, await sendBookingMessage(booking));
+  } catch (error) { recordTelegramFailure(booking, error); }
+  booking.status = 'CONFIRMED';
+  booking.updatedAt = new Date().toISOString();
+  await updateBooking(rowNumber, booking);
+  return booking;
 }
 
 export async function updateBookingById(id: string, raw: unknown) {
@@ -79,11 +97,6 @@ export async function updateBookingById(id: string, raw: unknown) {
       booking.googleEventId = await deterministicEventId(booking.requestId);
       booking.googleEventId = await ensureCalendarEvent(booking);
     }
-    booking.telegramMessageId = await updateBookingMessage(booking, 'updated');
-    booking.status = 'CONFIRMED';
-    booking.updatedAt = new Date().toISOString();
-    await updateBooking(found.rowNumber, booking);
-    return booking;
   } catch (error) {
     booking.status = 'ERROR';
     booking.error = error instanceof Error ? error.message.slice(0, 500) : 'Unknown integration error';
@@ -91,6 +104,12 @@ export async function updateBookingById(id: string, raw: unknown) {
     await updateBooking(found.rowNumber, booking).catch(() => undefined);
     throw error;
   }
+  try { applyTelegramResult(booking, await updateBookingMessage(booking, 'updated')); }
+  catch (error) { recordTelegramFailure(booking, error); }
+  booking.status = 'CONFIRMED';
+  booking.updatedAt = new Date().toISOString();
+  await updateBooking(found.rowNumber, booking);
+  return booking;
 }
 
 export async function cancelBookingById(id: string) {
@@ -100,12 +119,29 @@ export async function cancelBookingById(id: string) {
   const booking = { ...found.booking, status: 'CANCELED' as const, updatedAt: new Date().toISOString(), error: '' };
   try {
     await cancelCalendarEvent(booking.googleEventId);
-    booking.telegramMessageId = await updateBookingMessage(booking, 'canceled');
-    await updateBooking(found.rowNumber, booking);
-    return booking;
   } catch (error) {
     booking.error = error instanceof Error ? error.message.slice(0, 500) : 'Unknown integration error';
     await updateBooking(found.rowNumber, booking).catch(() => undefined);
     throw error;
   }
+  try { applyTelegramResult(booking, await updateBookingMessage(booking, 'canceled')); }
+  catch (error) { recordTelegramFailure(booking, error); }
+  await updateBooking(found.rowNumber, booking);
+  return booking;
+}
+
+export async function retryBookingTelegramById(id: string) {
+  const found = await findBooking(id);
+  if (!found.booking) throw new NotFoundError('រកមិនឃើញការកក់នេះ');
+  const booking = { ...found.booking, error: '' };
+  try {
+    applyTelegramResult(booking, await updateBookingMessage(booking, booking.status === 'CANCELED' ? 'canceled' : 'updated'));
+  } catch (error) {
+    recordTelegramFailure(booking, error);
+    await updateBooking(found.rowNumber, booking).catch(() => undefined);
+    throw error;
+  }
+  booking.updatedAt = new Date().toISOString();
+  await updateBooking(found.rowNumber, booking);
+  return booking;
 }

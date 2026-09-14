@@ -1,5 +1,7 @@
 export const BOOKING_STATUSES = ['PENDING', 'CALENDAR_CREATED', 'CONFIRMED', 'ERROR', 'CANCELED'] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
+export const TELEGRAM_SYNC_STATUSES = ['SYNCED', 'NEW_MESSAGE', 'FAILED', 'LEGACY', 'DISABLED'] as const;
+export type TelegramSyncStatus = (typeof TELEGRAM_SYNC_STATUSES)[number] | '';
 
 export type BookingInput = {
   requestId: string;
@@ -29,6 +31,10 @@ export type Booking = Omit<BookingInput, 'telegramInitData'> & {
   telegramMessageId: string;
   telegramUserId: string;
   error: string;
+  telegramChatId: string;
+  telegramTopicId: string;
+  telegramStatus: TelegramSyncStatus;
+  telegramUpdatedAt: string;
 };
 
 export const SHEET_HEADERS = [
@@ -36,6 +42,7 @@ export const SHEET_HEADERS = [
   'Coordinator', 'Phone', 'Department', 'Room', 'Date', 'Start Time', 'End Time',
   'Attendees', 'Technical Staff', 'Equipment', 'Notes', 'Time Zone', 'Source',
   'Google Event ID', 'Telegram Message ID', 'Telegram User ID', 'Error',
+  'Telegram Chat ID', 'Telegram Topic ID', 'Telegram Status', 'Telegram Updated At',
 ] as const;
 
 export function bookingToRow(booking: Booking): (string | number)[] {
@@ -45,7 +52,8 @@ export function bookingToRow(booking: Booking): (string | number)[] {
     booking.date, booking.startTime, booking.endTime, booking.attendees,
     booking.technicalStaff.join(' | '), booking.equipment.join(' | '), booking.notes,
     booking.timeZone, booking.source, booking.googleEventId, booking.telegramMessageId,
-    booking.telegramUserId, booking.error,
+    booking.telegramUserId, booking.error, booking.telegramChatId, booking.telegramTopicId,
+    booking.telegramStatus, booking.telegramUpdatedAt,
   ];
 }
 
@@ -63,5 +71,8 @@ export function rowToBooking(row: unknown[]): Booking {
     equipment: value(15) ? value(15).split(' | ') : [], notes: value(16),
     timeZone: value(17) || 'Asia/Phnom_Penh', source: value(18), googleEventId: value(19),
     telegramMessageId: value(20), telegramUserId: value(21), error: value(22),
+    telegramChatId: value(23), telegramTopicId: value(24),
+    telegramStatus: (value(25) || (value(20) ? 'LEGACY' : '')) as TelegramSyncStatus,
+    telegramUpdatedAt: value(26),
   };
 }

@@ -27,6 +27,7 @@ const booking = (id, eventId='', status='CONFIRMED') => ({
   startTime:'09:00',endTime:'10:00',attendees:1,technicalStaff:[],equipment:[],notes:'',
   timeZone:'Asia/Phnom_Penh',source:'legacy-form-ksfh',googleEventId:eventId,
   telegramMessageId:'',telegramUserId:'',error:'',
+  telegramChatId:'',telegramTopicId:'',telegramStatus:'',telegramUpdatedAt:'',
 });
 const event = (id, start='2026-01-12T09:00', requestId='') => ({
   id,status:'confirmed',summary:'📅 Meeting '+id.replace('e','b'),location:'Room',

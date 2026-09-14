@@ -12,6 +12,10 @@ export function publicBooking(booking: Booking): Booking {
     googleEventId: '',
     telegramMessageId: '',
     telegramUserId: '',
+    telegramChatId: '',
+    telegramTopicId: '',
+    telegramStatus: '',
+    telegramUpdatedAt: '',
     error: '',
   };
 }

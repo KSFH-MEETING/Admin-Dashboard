@@ -65,6 +65,21 @@ function Status({ value }: { value: string }) {
   return <Badge variant={variant} className={value === 'CONFIRMED' ? 'bg-emerald-700' : ''}>{statusText[value] || value}</Badge>;
 }
 
+function telegramStatusText(booking: Booking) {
+  if (booking.telegramStatus === 'SYNCED') return { text: '✅ បាន Sync សារចាស់', className: 'border-emerald-200 bg-emerald-50 text-emerald-800' };
+  if (booking.telegramStatus === 'NEW_MESSAGE') return { text: '🟡 បានផ្ញើសារថ្មីជំនួសសារចាស់', className: 'border-amber-200 bg-amber-50 text-amber-800' };
+  if (booking.telegramStatus === 'FAILED') return { text: '🔴 មិនទាន់ Sync', className: 'border-red-200 bg-red-50 text-red-800' };
+  if (booking.telegramStatus === 'DISABLED') return { text: '⚪ មិនបានកំណត់ Telegram', className: 'border-slate-200 bg-slate-50 text-slate-700' };
+  return { text: '⚪ ទិន្នន័យចាស់ · នឹង Sync ពេលកែ', className: 'border-slate-200 bg-slate-50 text-slate-700' };
+}
+
+function savedNotice(action: 'updated' | 'canceled', booking: Booking) {
+  const base = action === 'updated' ? '✅ បានរក្សាទុកការកែប្រែ។' : '✅ បានលុបចោលការកក់។';
+  if (booking.telegramStatus === 'NEW_MESSAGE') return `${base} 🟡 Telegram បានផ្ញើសារថ្មីជំនួសសារចាស់។`;
+  if (booking.telegramStatus === 'FAILED') return `${base} ⚠️ Telegram មិនទាន់ Sync — អាចសាកល្បងម្ដងទៀតក្នុងព័ត៌មានលម្អិត។`;
+  return base;
+}
+
 function pageSequence(current: number, total: number) {
   if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
   const pages: Array<number | string> = [1];
@@ -165,6 +180,8 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
   const [details, setDetails] = useState<Booking | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [telegramRetrying, setTelegramRetrying] = useState(false);
+  const [telegramRetryError, setTelegramRetryError] = useState('');
   const [notice, setNotice] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   useEffect(() => {
@@ -261,10 +278,23 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
     if (!canceling || cancelBusy) return;
     setCancelBusy(true); setCancelError('');
     try {
-      await cancelById(canceling.bookingId);
-      setCanceling(null); setNotice('✅ បានលុបចោលការកក់។');
+      const saved = await cancelById(canceling.bookingId);
+      setCanceling(null); setNotice(savedNotice('canceled', saved));
     } catch (error) { setCancelError(error instanceof Error ? error.message : 'មានបញ្ហា'); }
     finally { setCancelBusy(false); }
+  }
+
+  async function retryTelegram(booking: Booking) {
+    if (telegramRetrying || !canEdit) return;
+    setTelegramRetrying(true); setTelegramRetryError('');
+    try {
+      const response = await adminFetch(`/api/admin/bookings/${encodeURIComponent(booking.bookingId)}/telegram`, { method: 'POST' });
+      const result = await response.json() as { booking?: Booking; message?: string };
+      if (!response.ok || !result.booking) throw new Error(result.message || 'មិនអាច Sync Telegram បាន');
+      setBookings((items) => items.map((item) => item.bookingId === result.booking?.bookingId ? result.booking : item));
+      setDetails(result.booking); setNotice(result.booking.telegramStatus === 'NEW_MESSAGE' ? '🟡 Telegram បានផ្ញើសារថ្មីជំនួសសារចាស់។' : '✅ Telegram បាន Sync រួចរាល់។');
+    } catch (error) { setTelegramRetryError(error instanceof Error ? error.message : 'មិនអាច Sync Telegram បាន'); }
+    finally { setTelegramRetrying(false); }
   }
 
   return (
@@ -333,11 +363,11 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
         </>}
       </div>
 
-      {canEdit && editing && <EditPanel booking={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setBookings((items) => items.map((item) => item.bookingId === saved.bookingId ? saved : item)); setEditing(null); setNotice('✅ បានរក្សាទុកការកែប្រែ។'); }} />}
+      {canEdit && editing && <EditPanel booking={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setBookings((items) => items.map((item) => item.bookingId === saved.bookingId ? saved : item)); setEditing(null); setNotice(savedNotice('updated', saved)); }} />}
       {calendarOpen && <RoomCalendarModal onClose={() => setCalendarOpen(false)} />}
-      {details && <Modal title="📅 ព័ត៌មានលម្អិតការកក់" onClose={() => setDetails(null)}><div className="space-y-5 p-5"><div><Status value={details.status} /><h3 className="mt-3 break-words text-xl font-bold leading-8">{details.title}</h3><p className="mt-1 text-xs text-slate-500">{details.bookingId}</p></div><dl className="grid gap-4 sm:grid-cols-2">{[
+      {details && <Modal title="📅 ព័ត៌មានលម្អិតការកក់" onClose={() => { setDetails(null); setTelegramRetryError(''); }}><div className="space-y-5 p-5"><div><Status value={details.status} /><h3 className="mt-3 break-words text-xl font-bold leading-8">{details.title}</h3><p className="mt-1 text-xs text-slate-500">{details.bookingId}</p></div><dl className="grid gap-4 sm:grid-cols-2">{[
         ['📅 កាលបរិច្ឆេទ', details.date], ['🕒 ម៉ោងកម្ពុជា', details.startTime + '–' + details.endTime], ['📍 បន្ទប់', details.room], ['🏢 ផ្នែក', details.department], ['👤 អ្នកសម្របសម្រួល', details.coordinator], ['☎️ លេខទូរស័ព្ទ', details.phone], ['👥 អ្នកចូលរួម', String(details.attendees)], ['🛠️ បុគ្គលិកបច្ចេកទេស', details.technicalStaff.join(', ')], ['🎤 សម្ភារៈ', details.equipment.join(', ')], ['📝 កំណត់ចំណាំ', details.notes],
-      ].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{value || '—'}</dd></div>)}</dl>{details.error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{details.error}</p>}<div className="flex flex-wrap justify-end gap-2 border-t pt-4"><Button variant="outline" onClick={() => setDetails(null)}>ត្រឡប់</Button>{canEdit && details.status !== 'CANCELED' && <Button onClick={() => { setEditing(details); setDetails(null); }}>✏️ កែប្រែការកក់</Button>}</div></div></Modal>}
+      ].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{value || '—'}</dd></div>)}</dl>{!guest && (() => { const telegram = telegramStatusText(details); return <section aria-label="ស្ថានភាពការភ្ជាប់" className="rounded-xl border bg-slate-50 p-4"><h4 className="font-semibold">ស្ថានភាពការភ្ជាប់</h4><div className="mt-3 grid gap-2 text-sm sm:grid-cols-3"><p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">📊 Google Sheet<br /><strong>បានរក្សាទុក</strong></p><p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">📅 Google Calendar<br /><strong>{details.googleEventId ? 'បាន Sync' : 'មិនទាន់ Sync'}</strong></p><p className={`rounded-lg border p-3 ${telegram.className}`}>📢 Telegram<br /><strong>{telegram.text}</strong></p></div>{details.telegramUpdatedAt && <p className="mt-2 text-xs text-slate-500">Telegram កែចុងក្រោយ៖ {new Date(details.telegramUpdatedAt).toLocaleString('en-GB', { timeZone: 'Asia/Phnom_Penh' })}</p>}{canEdit && details.telegramStatus === 'FAILED' && <Button className="mt-3" variant="outline" disabled={telegramRetrying} onClick={() => void retryTelegram(details)}>{telegramRetrying ? 'កំពុងសាកល្បង…' : '🔄 សាកល្បង Telegram ម្ដងទៀត'}</Button>}{telegramRetryError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{telegramRetryError}</p>}</section>; })()}{details.error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{details.error}</p>}<div className="flex flex-wrap justify-end gap-2 border-t pt-4"><Button variant="outline" onClick={() => { setDetails(null); setTelegramRetryError(''); }}>ត្រឡប់</Button>{canEdit && details.status !== 'CANCELED' && <Button onClick={() => { setEditing(details); setDetails(null); setTelegramRetryError(''); }}>✏️ កែប្រែការកក់</Button>}</div></div></Modal>}
       {canEdit && canceling && <Modal title="លុបចោលការកក់នេះ?" onClose={() => setCanceling(null)} busy={cancelBusy}><div className="space-y-4 p-5"><p className="font-semibold">{canceling.title}</p><p className="text-sm text-slate-500">{canceling.date} · {canceling.startTime}–{canceling.endTime} · {canceling.room}</p><p className="text-sm leading-6 text-slate-600">Calendar Event នឹងត្រូវលុប ហើយ Telegram នឹងបង្ហាញថាបានលុបចោល។ កំណត់ត្រានៅ Sheet នឹងរក្សាទុកសម្រាប់ប្រវត្តិ។</p>{cancelError && <p role="alert" className="text-sm text-red-700">{cancelError}</p>}<div className="flex justify-end gap-2"><Button variant="outline" disabled={cancelBusy} onClick={() => setCanceling(null)}>ត្រឡប់</Button><Button variant="destructive" disabled={cancelBusy} onClick={() => void cancel()}>{cancelBusy ? 'កំពុងលុបចោល…' : 'បញ្ជាក់លុបចោល'}</Button></div></div></Modal>}
     </main>
   );

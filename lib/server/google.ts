@@ -93,7 +93,7 @@ export async function ensureBookingSheet() {
       method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName(), gridProperties: { frozenRowCount: 1 } } } }] }),
     });
   }
-  const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${sheetRange('A1:W1')}?valueInputOption=RAW`;
+  const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${sheetRange('A1:AA1')}?valueInputOption=RAW`;
   await googleFetch(headerUrl, { method: 'PUT', body: JSON.stringify({ values: [[...SHEET_HEADERS]] }) });
   sheetReady = true;
 }
@@ -104,7 +104,7 @@ export async function listBookings(): Promise<Booking[]> {
 
 export async function listBookingRows(): Promise<{ booking: Booking; rowNumber: number }[]> {
   await ensureBookingSheet();
-  const response = await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId())}/values/${sheetRange('A2:W')}`);
+  const response = await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId())}/values/${sheetRange('A2:AA')}`);
   const result = await response.json() as { values?: unknown[][] };
   return (result.values || []).map((row, index) => ({ row, rowNumber: index + 2 })).filter((item) => item.row[0]).map((item) => ({ booking: rowToBooking(item.row), rowNumber: item.rowNumber }));
 }
@@ -117,12 +117,12 @@ export async function findBooking(value: string, key: 'bookingId' | 'requestId' 
 
 export async function appendBooking(booking: Booking) {
   await ensureBookingSheet();
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId())}/values/${sheetRange('A:W')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId())}/values/${sheetRange('A:AA')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
   await googleFetch(url, { method: 'POST', body: JSON.stringify({ values: [bookingToRow(booking)] }) });
 }
 
 export async function updateBooking(rowNumber: number, booking: Booking) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId())}/values/${sheetRange(`A${rowNumber}:W${rowNumber}`)}?valueInputOption=RAW`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId())}/values/${sheetRange(`A${rowNumber}:AA${rowNumber}`)}?valueInputOption=RAW`;
   await googleFetch(url, { method: 'PUT', body: JSON.stringify({ values: [bookingToRow(booking)] }) });
 }
 

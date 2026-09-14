@@ -1,5 +1,19 @@
 import { optionalEnv, requiredEnv } from './env';
-import type { Booking } from './types';
+import type { Booking, TelegramSyncStatus } from './types';
+
+export type TelegramSyncResult = {
+  messageId: string;
+  chatId: string;
+  topicId: string;
+  status: TelegramSyncStatus;
+  updatedAt: string;
+};
+
+class TelegramApiError extends Error {
+  constructor(public readonly statusCode: number, public readonly description: string) {
+    super(`Telegram: ${description}`);
+  }
+}
 
 function escapeHtml(value: string) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -26,37 +40,57 @@ async function telegram(method: string, body: Record<string, unknown>) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
   const result = await response.json() as { ok?: boolean; result?: { message_id?: number }; description?: string };
-  if (!response.ok || !result.ok) throw new Error(`Telegram: ${result.description || response.statusText}`);
+  if (!response.ok || !result.ok) throw new TelegramApiError(response.status, result.description || response.statusText);
   return result;
 }
 
-export async function sendBookingMessage(booking: Booking) {
-  if (!optionalEnv('TELEGRAM_BOT_TOKEN') || !optionalEnv('TELEGRAM_CHAT_ID')) return '';
-  const body: Record<string, unknown> = {
-    chat_id: requiredEnv('TELEGRAM_CHAT_ID'), text: bookingMessage(booking, 'new'), parse_mode: 'HTML',
-  };
-  const topicId = optionalEnv('TELEGRAM_TOPIC_ID');
+function destination() {
+  return { chatId: optionalEnv('TELEGRAM_CHAT_ID'), topicId: optionalEnv('TELEGRAM_TOPIC_ID') };
+}
+
+function syncResult(messageId: string, chatId: string, topicId: string, status: TelegramSyncStatus): TelegramSyncResult {
+  return { messageId, chatId, topicId, status, updatedAt: new Date().toISOString() };
+}
+
+async function sendToCurrentDestination(booking: Booking, action: 'new' | 'updated' | 'canceled', status: TelegramSyncStatus) {
+  const { chatId, topicId } = destination();
+  const body: Record<string, unknown> = { chat_id: chatId, text: bookingMessage(booking, action), parse_mode: 'HTML' };
   if (topicId) body.message_thread_id = Number(topicId);
   const result = await telegram('sendMessage', body);
-  return String(result.result?.message_id || '');
+  return syncResult(String(result.result?.message_id || ''), chatId, topicId, status);
+}
+
+function messageWasNotModified(error: unknown) {
+  return error instanceof TelegramApiError && /message is not modified/i.test(error.description);
+}
+
+function messageCannotBeEdited(error: unknown) {
+  return error instanceof TelegramApiError && /message (?:can(?:not|'t) be edited|to edit not found)|message_id_invalid|message identifier is not specified/i.test(error.description);
+}
+
+export async function sendBookingMessage(booking: Booking) {
+  const { chatId, topicId } = destination();
+  if (!optionalEnv('TELEGRAM_BOT_TOKEN') || !chatId) return syncResult('', chatId, topicId, 'DISABLED');
+  return sendToCurrentDestination(booking, 'new', 'SYNCED');
 }
 
 export async function updateBookingMessage(booking: Booking, action: 'updated' | 'canceled') {
-  if (!optionalEnv('TELEGRAM_BOT_TOKEN') || !optionalEnv('TELEGRAM_CHAT_ID')) return booking.telegramMessageId;
-  if (booking.telegramMessageId) {
-    await telegram('editMessageText', {
-      chat_id: requiredEnv('TELEGRAM_CHAT_ID'), message_id: Number(booking.telegramMessageId),
-      text: bookingMessage(booking, action), parse_mode: 'HTML',
-    });
-    return booking.telegramMessageId;
+  const { chatId, topicId } = destination();
+  if (!optionalEnv('TELEGRAM_BOT_TOKEN') || !chatId) return syncResult(booking.telegramMessageId, chatId, topicId, 'DISABLED');
+  const sameDestination = booking.telegramChatId === chatId && booking.telegramTopicId === topicId;
+  if (booking.telegramMessageId && sameDestination) {
+    try {
+      await telegram('editMessageText', {
+        chat_id: chatId, message_id: Number(booking.telegramMessageId),
+        text: bookingMessage(booking, action), parse_mode: 'HTML',
+      });
+      return syncResult(booking.telegramMessageId, chatId, topicId, 'SYNCED');
+    } catch (error) {
+      if (messageWasNotModified(error)) return syncResult(booking.telegramMessageId, chatId, topicId, 'SYNCED');
+      if (!messageCannotBeEdited(error)) throw error;
+    }
   }
-  const body: Record<string, unknown> = {
-    chat_id: requiredEnv('TELEGRAM_CHAT_ID'), text: bookingMessage(booking, action), parse_mode: 'HTML',
-  };
-  const topicId = optionalEnv('TELEGRAM_TOPIC_ID');
-  if (topicId) body.message_thread_id = Number(topicId);
-  const result = await telegram('sendMessage', body);
-  return String(result.result?.message_id || '');
+  return sendToCurrentDestination(booking, action, 'NEW_MESSAGE');
 }
 
 async function hmac(key: Uint8Array, data: string) {
