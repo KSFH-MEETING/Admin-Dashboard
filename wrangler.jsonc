@@ -10,6 +10,7 @@
     "GOOGLE_SHEET_NAME": "Bookings",
     "GOOGLE_CALENDAR_ID": "9687a0a6bcc63c3544547b42b7a51212b8092b61aa94fffba4c5b3f6b8a8bd31@group.calendar.google.com",
     "ADMIN_EMAILS": "komchay8@gmail.com",
-    "GOOGLE_CLIENT_ID": "243280232673-np36dhsqt9tqbbsf54fleivdi7vqo49m.apps.googleusercontent.com"
+    "GOOGLE_CLIENT_ID": "243280232673-np36dhsqt9tqbbsf54fleivdi7vqo49m.apps.googleusercontent.com",
+    "TELEGRAM_TOPIC_ID": "1601"
   }
 }
