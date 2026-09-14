@@ -6,6 +6,7 @@ import { ReportsPanel } from './reports-panel';
 import { UsersPanel } from './users-panel';
 import { CalendarSyncPanel } from './calendar-sync-panel';
 import { RoomCalendarModal } from './room-calendar-modal';
+import { TodayRoomAvailability } from './today-room-availability';
 import { userCan, type DashboardUser } from '@/lib/server/user-policy';
 import { GoogleLogin } from './google-login';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -273,6 +274,13 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
       listHeading.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
     });
   }
+  function selectRoomToday(room: string) {
+    setPeriod('today'); setStatus('ACTIVE'); setQuery(room); setPage(1);
+    window.requestAnimationFrame(() => {
+      listHeading.current?.focus({ preventScroll: true });
+      listHeading.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+    });
+  }
 
   async function cancel() {
     if (!canceling || cancelBusy) return;
@@ -326,6 +334,8 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
           ].map((card) => <button key={card.scope} type="button" aria-controls="booking-list" aria-pressed={period === card.scope && status === 'ACTIVE' && query === ''} onClick={() => selectSummary(card.scope)} disabled={loading || !configured || !!message} className="group rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:border-emerald-500 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700 aria-pressed:border-emerald-600 aria-pressed:bg-emerald-50/40 disabled:cursor-wait disabled:opacity-60"><span className={`mb-4 grid size-10 place-items-center rounded-xl ${card.color}`}><card.icon className="size-5" /></span><span className="block text-sm text-slate-500">{card.label}</span><span className="mt-1 block text-3xl font-bold text-slate-900">{loading ? '…' : card.value}</span><span className="mt-3 block text-xs font-medium text-emerald-700 group-hover:underline">មើលការកក់ →</span></button>)}
           <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="mb-4 grid size-10 place-items-center rounded-xl bg-orange-50 text-orange-700"><UsersRound className="size-5" /></div><p className="text-sm text-slate-500">អ្នកចូលរួមសរុប</p><p className="mt-1 text-3xl font-bold text-slate-900">{loading ? '…' : active.reduce((sum, item) => sum + item.attendees, 0)}</p></div>
         </section>
+
+        <TodayRoomAvailability bookings={bookings} loading={loading || !configured || !!message} onSelectRoom={selectRoomToday} />
 
         <section id="booking-list" aria-labelledby="booking-list-title" className="overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
