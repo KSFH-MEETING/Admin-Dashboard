@@ -10,11 +10,11 @@ import { dashboardFetch } from '@/lib/dashboard-fetch';
 import { parseUserInput, normalizeEmail, type DashboardRole, type DashboardUser } from '@/lib/server/user-policy';
 
 const roleLabel = { owner: 'ម្ចាស់ប្រព័ន្ធ', editor: 'គ្រប់គ្រងការកក់', viewer: 'មើលតែប៉ុណ្ណោះ' };
-const roleDescription = { owner: 'គ្រប់គ្រងការកក់គ្រប់ផ្នែក របាយការណ៍ និងសិទ្ធិអ្នកប្រើ។', editor: 'មើល កែ និងលុបចោលការកក់គ្រប់ផ្នែក។ មើល និងទាញយករបាយការណ៍។ មិនអាចគ្រប់គ្រងអ្នកប្រើ។', viewer: 'មើលការកក់គ្រប់ផ្នែក រួមទាំងព័ត៌មានអ្នកសម្របសម្រួល និងទាញយករបាយការណ៍។ មិនអាចកែ ឬលុបចោលការកក់ និងមិនអាចគ្រប់គ្រងអ្នកប្រើ។' };
+const roleDescription = { owner: 'គ្រប់គ្រងការកក់ របាយការណ៍ សិទ្ធិអ្នកប្រើ និង Stock សម្ភារៈប្រជុំ។', editor: 'មើល កែ និងលុបចោលការកក់គ្រប់ផ្នែក។ មើលរបាយការណ៍ និង Stock។ មិនអាចកែ Stock ឬគ្រប់គ្រងអ្នកប្រើ។', viewer: 'មើលការកក់ របាយការណ៍ និង Stock សម្ភារៈប្រជុំ។ មិនអាចកែ Booking, Stock ឬគ្រប់គ្រងអ្នកប្រើ។' };
 
 function PermissionTable() {
   return <div className="overflow-x-auto rounded-xl border bg-white"><table className="w-full text-left text-sm"><caption className="p-4 text-left font-semibold">សិទ្ធិតាមតួនាទី · អនុវត្តចំពោះការកក់គ្រប់ផ្នែក</caption><thead className="bg-slate-50"><tr>{['មុខងារ', 'Owner', 'Editor', 'Viewer'].map((text) => <th scope="col" className="px-4 py-3" key={text}>{text}</th>)}</tr></thead><tbody>{[
-    ['មើលព័ត៌មានការកក់', true, true, true], ['មើល / ទាញយករបាយការណ៍', true, true, true], ['កែការកក់', true, true, false], ['លុបចោលការកក់', true, true, false], ['បន្ថែម / កែ / បិទអ្នកប្រើ', true, false, false],
+    ['មើលព័ត៌មានការកក់', true, true, true], ['មើល / ទាញយករបាយការណ៍', true, true, true], ['មើល Stock សម្ភារៈ', true, true, true], ['កែ Stock សម្ភារៈ', true, false, false], ['កែការកក់', true, true, false], ['លុបចោលការកក់', true, true, false], ['បន្ថែម / កែ / បិទអ្នកប្រើ', true, false, false],
   ].map(([label, ...values]) => <tr key={String(label)} className="border-t"><th scope="row" className="px-4 py-3 font-normal">{label}</th>{values.map((allowed, index) => <td key={index} className={`px-4 py-3 ${allowed ? 'text-emerald-800' : 'text-slate-500'}`}>{allowed ? '✓ បាន' : '— មិនបាន'}</td>)}</tr>)}</tbody></table></div>;
 }
 

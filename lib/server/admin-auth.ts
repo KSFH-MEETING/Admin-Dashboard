@@ -14,7 +14,7 @@ export function authCookie(name: string, value: string, maxAge: number) {
   return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
 }
 
-export async function requireDashboardUser(request: Request, permission: 'read' | 'bookings' | 'users' = 'read') {
+export async function requireDashboardUser(request: Request, permission: 'read' | 'bookings' | 'users' | 'inventory' = 'read') {
   if (!['GET', 'HEAD'].includes(request.method)) requireSameOrigin(request);
   const { clientId } = authConfig();
   const identity = await verifyGoogleIdentity(readCookie(request, SESSION_COOKIE), clientId);

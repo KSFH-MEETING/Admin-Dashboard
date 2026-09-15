@@ -8,6 +8,7 @@ import { UsersPanel } from './users-panel';
 import { CalendarSyncPanel } from './calendar-sync-panel';
 import { RoomCalendarModal } from './room-calendar-modal';
 import { TodayRoomAvailability } from './today-room-availability';
+import { InventoryPanel } from './inventory-panel';
 import { userCan, type DashboardUser } from '@/lib/server/user-policy';
 import { GoogleLogin } from './google-login';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -323,7 +324,7 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
           {!guest && <Button className="shrink-0" variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>📅 ប្រតិទិនកក់បន្ទប់</Button>}
         </nav>
         {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
-        {view === 'inventory' ? <section aria-label="Inventory" className="min-h-[60vh] rounded-2xl border bg-white" /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : view === 'calendar-sync' && user.role === 'owner' ? <CalendarSyncPanel /> : <>
+        {view === 'inventory' ? <InventoryPanel canManage={user.role === 'owner'} /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : view === 'calendar-sync' && user.role === 'owner' ? <CalendarSyncPanel /> : <>
         {!canEdit && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm leading-7 text-blue-800">{guest ? '🌐 Guest mode — អ្នកអាចមើលព័ត៌មាន Booking គ្រប់ផ្នែក។ Menu និងមុខងារផ្សេងទៀតត្រូវបានបិទ ហើយមិនអាចកែ ឬលុបការកក់បាន។' : '👁️ សិទ្ធិមើលតែប៉ុណ្ណោះ — អ្នកអាចមើល និងស្វែងរកការកក់។'}</p>}
         {message && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4" />{message}</div>}
         {!configured && <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-bold text-amber-950">Backend មិនទាន់បានភ្ជាប់</h2><p className="mt-1 text-sm text-amber-800">កូដរួចរាល់ ប៉ុន្តែត្រូវបញ្ចូល Google Service Account និង Secrets នៅ Cloudflare មុនទទួលទិន្នន័យពិត។</p>{!guest && <Link href="/setup" className="mt-3 inline-block text-sm font-bold text-amber-900 underline">មើលវិធីភ្ជាប់</Link>}</div>}

@@ -16,9 +16,9 @@ export function parseUserInput(value: unknown): UserInput {
   return { email, name, role: data.role, active: data.active };
 }
 
-export function userCan(user: Pick<DashboardUser, 'active' | 'role'>, permission: 'read' | 'bookings' | 'users') {
+export function userCan(user: Pick<DashboardUser, 'active' | 'role'>, permission: 'read' | 'bookings' | 'users' | 'inventory') {
   if (!user.active) return false;
-  if (permission === 'users') return user.role === 'owner';
+  if (permission === 'users' || permission === 'inventory') return user.role === 'owner';
   if (permission === 'bookings') return user.role === 'owner' || user.role === 'editor';
   return permission === 'read' && ['owner', 'editor', 'viewer'].includes(user.role);
 }

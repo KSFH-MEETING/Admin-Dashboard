@@ -32,7 +32,8 @@ Form ស្នើសុំបន្ទប់នៅតែអាចប្រើប
 ## ការផ្ទៀងផ្ទាត់
 
 - TypeScript, lint និង production build បានឆ្លងកាត់។
-- Tests ចំនួន 23 បានឆ្លងកាត់៖ Google authentication, role permissions, user store និង report filtering/totals/CSV។
+- Tests ចំនួន 42 បានឆ្លងកាត់៖ Google authentication, role permissions, user store, Inventory, reports, Calendar និង Telegram sync។
+- Inventory សម្រាប់សម្ភារៈប្រជុំប្រើ ID ខ្លី `EQ-001` និងគ្រប់គ្រងតាមចំនួនសរុប។ Owner អាចបន្ថែម/កែ/បិទ Item; Editor និង Viewer មើលបាន; Guest មិនអាចចូលបាន។
 - បានពិនិត្យផ្ទាល់លើ Cloudflare៖ Booking details, Edit layout, Escape/focus return, report totals/room filter និង Inventory ទទេ។
 - Anonymous GET/PATCH/DELETE លើ admin bookings ត្រូវបានបដិសេធ 401។
 - មិនបានបង្កើតអ្នកប្រើសាកល្បង ឬកែ/លុប Booking ពិតក្នុងការឆែក UX នេះទេ។ Login UI ត្រូវបានកែ និង build-check; មិនបានចាកចេញពី session របស់ម្ចាស់ប្រព័ន្ធដើម្បីសាកល្បង Google popup ម្តងទៀតទេ។ Mobile និង Print/PDF មិនទាន់បានពិនិត្យផ្ទាល់លើឧបករណ៍ទាំងអស់។

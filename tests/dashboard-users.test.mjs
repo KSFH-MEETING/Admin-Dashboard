@@ -10,7 +10,8 @@ test('permission matrix restricts booking changes and user administration', () =
     assert.equal(userCan({ role, active: true }, 'read'), true);
     assert.equal(userCan({ role, active: true }, 'bookings'), role !== 'viewer');
     assert.equal(userCan({ role, active: true }, 'users'), role === 'owner');
-    for (const permission of ['read', 'bookings', 'users']) assert.equal(userCan({ role, active: false }, permission), false);
+    assert.equal(userCan({ role, active: true }, 'inventory'), role === 'owner');
+    for (const permission of ['read', 'bookings', 'users', 'inventory']) assert.equal(userCan({ role, active: false }, permission), false);
   }
 });
 

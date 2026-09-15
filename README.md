@@ -72,4 +72,8 @@ Owners listed in ADMIN_EMAILS can open Dashboard → Users to add existing Googl
 
 User permissions and their change history are stored as append-only rows in the DashboardUsers tab of the configured Google Sheet. Keep spreadsheet edit access limited to trusted administrators, since it controls both booking data and user permissions. Non-owner permissions are checked on every server request, including existing sessions; disabling a user revokes their next request. Login supports Gmail and Google Workspace identities.
 
+## Meeting equipment inventory
+
+Dashboard → Inventory manages a small stock of meeting equipment with short IDs such as `EQ-001`. Availability is calculated from total, reserved, in-use, and damaged quantities. Inventory changes are stored as append-only rows in the `Inventory` tab of the configured Google Sheet. Owner can add, edit, or disable items; Editor and Viewer have read-only access; Guest cannot open Inventory.
+
 Calendar events show emoji labels and the KSFH-MEETING brand in their description. Google's native creator field is read-only and remains the actual service account. New/edited bookings receive this styling.
