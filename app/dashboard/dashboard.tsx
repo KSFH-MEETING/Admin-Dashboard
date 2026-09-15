@@ -3,6 +3,7 @@
 import { dashboardFetch as adminFetch } from '@/lib/dashboard-fetch';
 import { Modal } from './modal';
 import { ReportsPanel } from './reports-panel';
+import { allowedDashboardViews, resolveDashboardView, type DashboardView } from '@/lib/dashboard-access';
 import { UsersPanel } from './users-panel';
 import { CalendarSyncPanel } from './calendar-sync-panel';
 import { RoomCalendarModal } from './room-calendar-modal';
@@ -159,7 +160,7 @@ function EditPanel({ booking, onClose, onSaved }: { booking: Booking; onClose: (
 function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user: DashboardUser; onSignOut: () => void; signingOut: boolean; guest?: boolean }) {
   const { email } = user;
   const canEdit = userCan(user, 'bookings');
-  const [view, setView] = useState<'bookings' | 'users' | 'reports' | 'calendar-sync' | 'inventory'>('bookings');
+  const [view, setView] = useState<DashboardView>('bookings');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -187,12 +188,11 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
   const [calendarOpen, setCalendarOpen] = useState(false);
   useEffect(() => {
     const navigate = () => {
-      const hash = window.location.hash.slice(1);
-      setView(hash === 'reports' || hash === 'inventory' || ((hash === 'users' || hash === 'calendar-sync') && user.role === 'owner') ? hash : 'bookings');
+      setView(resolveDashboardView(window.location.hash, user.role, guest));
     };
     navigate(); window.addEventListener('hashchange', navigate);
     return () => window.removeEventListener('hashchange', navigate);
-  }, [user.role]);
+  }, [guest, user.role]);
 
   const load = useCallback(async (throwOnError = false) => {
     setLoading(true); setMessage('');
@@ -310,18 +310,21 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
       <header className="border-b bg-[#075d45] text-white print:hidden">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl bg-white/12"><LayoutDashboard /></div><div><p className="text-xs text-emerald-100">KSFH Meeting</p><h1 className="font-bold">ផ្ទាំងគ្រប់គ្រង</h1></div></div>
-          <div className="flex flex-wrap items-center justify-end gap-2"><div className="text-right text-xs"><p className="font-semibold">{guest ? 'Guest' : user.name || email}</p>{!guest && <p className="max-w-56 truncate text-emerald-100" title={email}>{email}</p>}<p className="mt-1 text-emerald-100">{guest ? '🌐 សាធារណៈ · មើលតែប៉ុណ្ណោះ' : user.role === 'owner' ? '👑 ម្ចាស់ប្រព័ន្ធ' : user.role === 'editor' ? '✏️ គ្រប់គ្រង Booking' : '👁️ មើលតែប៉ុណ្ណោះ'}</p></div><Button variant="secondary" disabled={signingOut} onClick={onSignOut}>{signingOut ? 'កំពុងចាកចេញ…' : guest ? 'ចូលគណនី Google' : 'ចាកចេញ'}</Button><Link href="/request" target="_blank"><Button variant="secondary"><Plus /> Form ស្នើសុំ <ExternalLink className="size-3" /></Button></Link></div>
+          <div className="flex flex-wrap items-center justify-end gap-2"><div className="text-right text-xs"><p className="font-semibold">{guest ? 'Guest' : user.name || email}</p>{!guest && <p className="max-w-56 truncate text-emerald-100" title={email}>{email}</p>}<p className="mt-1 text-emerald-100">{guest ? '🌐 សាធារណៈ · មើល Booking តែប៉ុណ្ណោះ' : user.role === 'owner' ? '👑 ម្ចាស់ប្រព័ន្ធ' : user.role === 'editor' ? '✏️ គ្រប់គ្រង Booking' : '👁️ មើលតែប៉ុណ្ណោះ'}</p></div><Button variant="secondary" disabled={signingOut} onClick={onSignOut}>{signingOut ? 'កំពុងចាកចេញ…' : guest ? 'ចូលគណនី Google' : 'ចាកចេញ'}</Button>{!guest && <Link href="/request" target="_blank"><Button variant="secondary"><Plus /> Form ស្នើសុំ <ExternalLink className="size-3" /></Button></Link>}</div>
         </div>
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <nav className="sticky top-0 z-30 -mx-4 mb-5 flex gap-2 overflow-x-auto border-b border-slate-200 bg-slate-50/95 px-4 py-3 shadow-sm backdrop-blur print:hidden sm:-mx-6 sm:px-6" aria-label="ផ្នែក Dashboard">
-          {([{ key: 'bookings', label: '📅 ការកក់' }, { key: 'reports', label: '📊 របាយការណ៍' }, ...(user.role === 'owner' ? [{ key: 'calendar-sync', label: '🔄 Calendar Sync' }, { key: 'users', label: '👥 អ្នកប្រើ' }] : []), { key: 'inventory', label: '📦 Inventory' }] as { key: typeof view; label: string }[]).map((item) => <Button className="shrink-0" key={item.key} aria-current={view === item.key ? 'page' : undefined} variant={view === item.key ? 'default' : 'outline'} onClick={() => { window.location.hash = item.key; setView(item.key); setNotice(''); }}>{item.label}</Button>)}
-          <Button className="shrink-0" variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>📅 ប្រតិទិនកក់បន្ទប់</Button>
+          {allowedDashboardViews(user.role, guest).map((key) => {
+            const labels: Record<DashboardView, string> = { bookings: '📅 ការកក់', reports: '📊 របាយការណ៍', 'calendar-sync': '🔄 Calendar Sync', users: '👥 អ្នកប្រើ', inventory: '📦 Inventory' };
+            return <Button className="shrink-0" key={key} aria-current={view === key ? 'page' : undefined} variant={view === key ? 'default' : 'outline'} onClick={() => { window.location.hash = key; setView(key); setNotice(''); }}>{labels[key]}</Button>;
+          })}
+          {!guest && <Button className="shrink-0" variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>📅 ប្រតិទិនកក់បន្ទប់</Button>}
         </nav>
         {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
         {view === 'inventory' ? <section aria-label="Inventory" className="min-h-[60vh] rounded-2xl border bg-white" /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : view === 'calendar-sync' && user.role === 'owner' ? <CalendarSyncPanel /> : <>
-        {!canEdit && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm leading-7 text-blue-800">{guest ? '🌐 Guest mode — អ្នកកំពុងមើល Dashboard សាធារណៈ។ អ្នកអាចមើលព័ត៌មានការកក់គ្រប់ផ្នែក និងរបាយការណ៍ ប៉ុន្តែមិនអាចកែ ឬលុបបាន។' : '👁️ សិទ្ធិមើលតែប៉ុណ្ណោះ — អ្នកអាចមើល និងស្វែងរកការកក់។'}</p>}
+        {!canEdit && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm leading-7 text-blue-800">{guest ? '🌐 Guest mode — អ្នកអាចមើលព័ត៌មាន Booking គ្រប់ផ្នែក។ Menu និងមុខងារផ្សេងទៀតត្រូវបានបិទ ហើយមិនអាចកែ ឬលុបការកក់បាន។' : '👁️ សិទ្ធិមើលតែប៉ុណ្ណោះ — អ្នកអាចមើល និងស្វែងរកការកក់។'}</p>}
         {message && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4" />{message}</div>}
         {!configured && <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-bold text-amber-950">Backend មិនទាន់បានភ្ជាប់</h2><p className="mt-1 text-sm text-amber-800">កូដរួចរាល់ ប៉ុន្តែត្រូវបញ្ចូល Google Service Account និង Secrets នៅ Cloudflare មុនទទួលទិន្នន័យពិត។</p><Link href="/setup" className="mt-3 inline-block text-sm font-bold text-amber-900 underline">មើលវិធីភ្ជាប់</Link></div>}
 
@@ -373,7 +376,7 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
       </div>
 
       {canEdit && editing && <EditPanel booking={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setBookings((items) => items.map((item) => item.bookingId === saved.bookingId ? saved : item)); setEditing(null); setNotice(savedNotice('updated', saved)); }} />}
-      {calendarOpen && <RoomCalendarModal onClose={() => setCalendarOpen(false)} />}
+      {!guest && calendarOpen && <RoomCalendarModal onClose={() => setCalendarOpen(false)} />}
       {details && <Modal title="📅 ព័ត៌មានលម្អិតការកក់" onClose={() => { setDetails(null); setTelegramRetryError(''); }}><div className="space-y-5 p-5"><div><Status value={details.status} /><h3 className="mt-3 break-words text-xl font-bold leading-8">{details.title}</h3><p className="mt-1 text-xs text-slate-500">{details.bookingId}</p></div><dl className="grid gap-4 sm:grid-cols-2">{[
         ['📅 កាលបរិច្ឆេទ', details.date], ['🕒 ម៉ោងកម្ពុជា', details.startTime + '–' + details.endTime], ['📍 បន្ទប់', details.room], ['🏢 ផ្នែក', details.department], ['👤 អ្នកសម្របសម្រួល', details.coordinator], ['☎️ លេខទូរស័ព្ទ', details.phone], ['👥 អ្នកចូលរួម', String(details.attendees)], ['🛠️ បុគ្គលិកបច្ចេកទេស', details.technicalStaff.join(', ')], ['🎤 សម្ភារៈ', details.equipment.join(', ')], ['📝 កំណត់ចំណាំ', details.notes],
       ].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{value || '—'}</dd></div>)}</dl>{!guest && (() => { const telegram = telegramStatusText(details); return <section aria-label="ស្ថានភាពការភ្ជាប់" className="rounded-xl border bg-slate-50 p-4"><h4 className="font-semibold">ស្ថានភាពការភ្ជាប់</h4><div className="mt-3 grid gap-2 text-sm sm:grid-cols-3"><p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">📊 Google Sheet<br /><strong>បានរក្សាទុក</strong></p><p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">📅 Google Calendar<br /><strong>{details.googleEventId ? 'បាន Sync' : 'មិនទាន់ Sync'}</strong></p><p className={`rounded-lg border p-3 ${telegram.className}`}>📢 Telegram<br /><strong>{telegram.text}</strong></p></div>{details.telegramUpdatedAt && <p className="mt-2 text-xs text-slate-500">Telegram កែចុងក្រោយ៖ {new Date(details.telegramUpdatedAt).toLocaleString('en-GB', { timeZone: 'Asia/Phnom_Penh' })}</p>}{canEdit && details.telegramStatus === 'FAILED' && <Button className="mt-3" variant="outline" disabled={telegramRetrying} onClick={() => void retryTelegram(details)}>{telegramRetrying ? 'កំពុងសាកល្បង…' : '🔄 សាកល្បង Telegram ម្ដងទៀត'}</Button>}{telegramRetryError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{telegramRetryError}</p>}</section>; })()}{details.error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{details.error}</p>}<div className="flex flex-wrap justify-end gap-2 border-t pt-4"><Button variant="outline" onClick={() => { setDetails(null); setTelegramRetryError(''); }}>ត្រឡប់</Button>{canEdit && details.status !== 'CANCELED' && <Button onClick={() => { setEditing(details); setDetails(null); setTelegramRetryError(''); }}>✏️ កែប្រែការកក់</Button>}</div></div></Modal>}

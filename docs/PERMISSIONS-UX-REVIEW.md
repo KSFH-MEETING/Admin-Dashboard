@@ -16,9 +16,10 @@
 ## Guest ដោយមិន Login
 
 - ចុច «ចូលជា Guest ដោយមិន Login» នៅផ្ទាំង Login។
-- មើល Dashboard, Booking details គ្រប់ផ្នែក និងរបាយការណ៍បាន។
+- មើល Dashboard និង Booking details គ្រប់ផ្នែកបាន។
 - មើលឈ្មោះ អ្នកសម្របសម្រួល លេខទូរស័ព្ទ បន្ទប់ ផ្នែក អ្នកចូលរួម សម្ភារៈ និងកំណត់ចំណាំបាន ព្រោះ Owner បានជ្រើសឱ្យព័ត៌មានទាំងនេះជាសាធារណៈ។
-- មិនអាចមើល User Control កែ ឬលុបចោល Booking បាន។
+- មិនអាចមើល Reports, Calendar popup, Calendar Sync, User Control ឬ Inventory បាន។
+- មិនអាចបើក Form ស្នើសុំពី Dashboard កែ ឬលុបចោល Booking បាន។ Public Form នៅតែដំណើរការសម្រាប់អ្នកដែលមាន Link ផ្ទាល់។
 - API សាធារណៈមិនបញ្ជូន Google Calendar ID, Telegram ID, Request ID និងកំហុសបច្ចេកទេស។
 - ប៊ូតុង «ចូលគណនី Google» ចាកចេញពី Guest mode និងត្រឡប់ទៅ Login។
 
