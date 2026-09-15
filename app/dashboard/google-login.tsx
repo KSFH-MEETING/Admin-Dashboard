@@ -76,7 +76,7 @@ export function GoogleLogin({ onSignedIn, onGuest, notice = '' }: { onSignedIn: 
       <div ref={button} className={`mt-6 flex justify-center ${busy ? 'pointer-events-none opacity-50' : ''}`} />
       <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" /><span>ឬ</span><span className="h-px flex-1 bg-slate-200" /></div>
       <Button type="button" variant="outline" className="w-full" onClick={onGuest}>🌐 ចូលជា Guest ដោយមិន Login</Button>
-      <p className="mt-2 text-xs leading-5 text-slate-500">Guest អាចមើលព័ត៌មានការកក់ និងរបាយការណ៍ តែមិនអាចកែ ឬលុបបាន។</p>
+      <p className="mt-2 text-xs leading-5 text-slate-500">Guest អាចមើលព័ត៌មាន Booking គ្រប់ផ្នែកតែប៉ុណ្ណោះ។ Menu និងមុខងារផ្សេងទៀតត្រូវបានបិទ។</p>
       {!ready && !message && <p className="mt-4 text-sm text-slate-500">កំពុងបើក Google Login…</p>}
       {busy && <output className="mt-4 block text-sm text-slate-500">កំពុងផ្ទៀងផ្ទាត់គណនី…</output>}
       {message && <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{message}<div className="mt-3"><Button variant="outline" disabled={busy} onClick={() => { setMessage(''); setReady(false); setAttempt((value) => value + 1); }}>ព្យាយាមម្ដងទៀត</Button></div></div>}
