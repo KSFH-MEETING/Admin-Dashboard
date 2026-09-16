@@ -2,6 +2,9 @@ export type InventoryItem = {
   itemId: string;
   name: string;
   category: string;
+  serialNumber: string;
+  acquiredDate: string;
+  specification: string;
   totalQty: number;
   reservedQty: number;
   inUseQty: number;
@@ -33,6 +36,9 @@ export function parseInventoryInput(value: unknown): InventoryInput {
   const data = value as Record<string, unknown>;
   const name = text(data.name, 100);
   const category = text(data.category, 60);
+  const serialNumber = text(data.serialNumber, 100);
+  const acquiredDate = text(data.acquiredDate, 10);
+  const specification = text(data.specification, 1000);
   const location = text(data.location, 100);
   const notes = text(data.notes, 500);
   const totalQty = quantity(data.totalQty, 'ចំនួនសរុប');
@@ -41,12 +47,32 @@ export function parseInventoryInput(value: unknown): InventoryInput {
   const damagedQty = quantity(data.damagedQty, 'ចំនួនខូច');
   if (!name) throw new Error('សូមបញ្ចូលឈ្មោះសម្ភារៈ');
   if (!category) throw new Error('សូមបញ្ចូលប្រភេទសម្ភារៈ');
+  if (!location) throw new Error('សូមជ្រើស ឬបញ្ចូលទីតាំងរក្សាទុក');
+  if (acquiredDate) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(acquiredDate);
+    const date = match
+      ? new Date(
+          Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+        )
+      : null;
+    if (
+      !match ||
+      !date ||
+      date.getUTCFullYear() !== Number(match[1]) ||
+      date.getUTCMonth() !== Number(match[2]) - 1 ||
+      date.getUTCDate() !== Number(match[3])
+    )
+      throw new Error('ថ្ងៃទិញ / ទទួលមិនត្រឹមត្រូវ');
+  }
   if (typeof data.active !== 'boolean') throw new Error('ស្ថានភាពសម្ភារៈមិនត្រឹមត្រូវ');
   if (reservedQty + inUseQty + damagedQty > totalQty)
     throw new Error('ចំនួនបានកក់ កំពុងប្រើ និងខូច មិនអាចលើសចំនួនសរុប');
   return {
     name,
     category,
+    serialNumber,
+    acquiredDate,
+    specification,
     totalQty,
     reservedQty,
     inUseQty,
@@ -88,6 +114,9 @@ export function inventoryFromRows(rows: unknown[][]): InventoryItem[] {
         location: row[7],
         active: row[8] === true || row[8] === 'TRUE',
         notes: row[9],
+        serialNumber: row[12],
+        acquiredDate: row[13],
+        specification: row[14],
       });
       items.set(itemId, {
         itemId,

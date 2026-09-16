@@ -22,6 +22,9 @@ const HEADERS = [
   'Notes',
   'Changed At',
   'Changed By',
+  'Serial Number',
+  'Acquired Date',
+  'Specification',
 ];
 const api = () =>
   `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(requiredEnv('GOOGLE_SHEET_ID'))}`;
@@ -32,52 +35,64 @@ async function initializeInventory() {
   const data = (await metadata.json()) as {
     sheets?: { properties: { title: string } }[];
   };
-  if (data.sheets?.some((sheet) => sheet.properties.title === INVENTORY_SHEET))
-    return;
-  const sheetId =
-    1_000_000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000_000);
-  try {
-    await googleFetch(`${api()}:batchUpdate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        requests: [
-          {
-            addSheet: {
-              properties: {
-                sheetId,
-                title: INVENTORY_SHEET,
-                gridProperties: { frozenRowCount: 1 },
+  if (
+    !data.sheets?.some((sheet) => sheet.properties.title === INVENTORY_SHEET)
+  ) {
+    const sheetId =
+      1_000_000 +
+      (crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000_000);
+    try {
+      await googleFetch(`${api()}:batchUpdate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  sheetId,
+                  title: INVENTORY_SHEET,
+                  gridProperties: { frozenRowCount: 1 },
+                },
               },
             },
-          },
-          {
-            updateCells: {
-              start: { sheetId, rowIndex: 0, columnIndex: 0 },
-              rows: [
-                {
-                  values: HEADERS.map((value) => ({
-                    userEnteredValue: { stringValue: value },
-                  })),
-                },
-              ],
-              fields: 'userEnteredValue',
+            {
+              updateCells: {
+                start: { sheetId, rowIndex: 0, columnIndex: 0 },
+                rows: [
+                  {
+                    values: HEADERS.map((value) => ({
+                      userEnteredValue: { stringValue: value },
+                    })),
+                  },
+                ],
+                fields: 'userEnteredValue',
+              },
             },
-          },
-        ],
-      }),
-    });
-  } catch (error) {
-    const retry = await googleFetch(`${api()}?fields=sheets.properties.title`);
-    const result = (await retry.json()) as {
-      sheets?: { properties: { title: string } }[];
-    };
-    if (
-      !result.sheets?.some(
-        (sheet) => sheet.properties.title === INVENTORY_SHEET,
+          ],
+        }),
+      });
+    } catch (error) {
+      const retry = await googleFetch(
+        `${api()}?fields=sheets.properties.title`,
+      );
+      const result = (await retry.json()) as {
+        sheets?: { properties: { title: string } }[];
+      };
+      if (
+        !result.sheets?.some(
+          (sheet) => sheet.properties.title === INVENTORY_SHEET,
+        )
       )
-    )
-      throw error;
+        throw error;
+    }
   }
+  await googleFetch(
+    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A1:O1`)}?valueInputOption=RAW`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ values: [HEADERS] }),
+    },
+  );
 }
 
 async function ensureInventory() {
@@ -91,7 +106,7 @@ async function ensureInventory() {
 export async function listInventoryItems() {
   await ensureInventory();
   const response = await googleFetch(
-    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A2:L`)}`,
+    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A2:O`)}`,
   );
   const data = (await response.json()) as { values?: unknown[][] };
   return inventoryFromRows(data.values || []).sort(
@@ -118,6 +133,15 @@ export async function saveInventoryItem(
     throw new AuthError('លេខសម្គាល់សម្ភារៈមិនត្រឹមត្រូវ', 400);
   if (!create && !items.some((item) => item.itemId === requestedId))
     throw new AuthError('រកមិនឃើញសម្ភារៈនេះ', 404);
+  if (
+    input.serialNumber &&
+    items.some(
+      (item) =>
+        item.itemId !== requestedId &&
+        item.serialNumber.toLowerCase() === input.serialNumber.toLowerCase(),
+    )
+  )
+    throw new AuthError('Serial Number នេះមានរួចហើយ', 409);
   const item: InventoryItem = {
     itemId: create ? nextInventoryId(items) : requestedId,
     ...input,
@@ -125,7 +149,7 @@ export async function saveInventoryItem(
     updatedBy: actor,
   };
   await googleFetch(
-    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A:L`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A:O`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: 'POST',
       body: JSON.stringify({
@@ -143,6 +167,9 @@ export async function saveInventoryItem(
             item.notes,
             item.updatedAt,
             item.updatedBy,
+            item.serialNumber,
+            item.acquiredDate,
+            item.specification,
           ],
         ],
       }),

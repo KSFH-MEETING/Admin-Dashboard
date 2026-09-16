@@ -10,6 +10,9 @@ import {
 const valid = {
   name: 'Projector',
   category: 'ការបង្ហាញ',
+  serialNumber: 'PJ-001',
+  acquiredDate: '2026-09-16',
+  specification: '4K, HDMI',
   totalQty: 5,
   reservedQty: 1,
   inUseQty: 1,
@@ -28,6 +31,8 @@ test('small-stock quantities stay consistent and availability is derived', () =>
     { reservedQty: 4 },
     { inUseQty: 2.5 },
     { name: '' },
+    { acquiredDate: '2026-02-31' },
+    { location: '' },
   ]) {
     assert.throws(() => parseInventoryInput({ ...valid, ...change }));
   }
@@ -82,5 +87,8 @@ test('short equipment IDs increment and the latest valid audit row wins', () => 
   assert.equal(items.length, 1);
   assert.equal(items[0].name, 'Projector HD');
   assert.equal(items[0].reservedQty, 1);
+  assert.equal(items[0].serialNumber, '');
+  assert.equal(items[0].acquiredDate, '');
+  assert.equal(items[0].specification, '');
   assert.equal(nextInventoryId(items), 'EQ-002');
 });

@@ -24,11 +24,15 @@ import {
   type InventoryItem,
 } from '@/lib/inventory';
 import { dashboardFetch } from '@/lib/dashboard-fetch';
+import { ROOMS } from '@/lib/meeting-config';
 import { Modal } from './modal';
 
 const EMPTY: InventoryInput = {
   name: '',
   category: '',
+  serialNumber: '',
+  acquiredDate: '',
+  specification: '',
   totalQty: 0,
   reservedQty: 0,
   inUseQty: 0,
@@ -44,6 +48,8 @@ const SUGGESTED_CATEGORIES = [
   'ខ្សែភ្ជាប់',
   'សម្ភារៈផ្សេងៗ',
 ];
+const LOCATION_OPTIONS = [...ROOMS, 'បន្ទប់សម្ភារៈ I.T'] as const;
+const CUSTOM_LOCATION = '__custom__';
 
 function ItemStatus({ item }: { item: InventoryItem }) {
   const available = availableInventory(item);
@@ -69,6 +75,9 @@ function InventoryEditor({
       ? {
           name: item.name,
           category: item.category,
+          serialNumber: item.serialNumber,
+          acquiredDate: item.acquiredDate,
+          specification: item.specification,
           totalQty: item.totalQty,
           reservedQty: item.reservedQty,
           inUseQty: item.inUseQty,
@@ -78,6 +87,12 @@ function InventoryEditor({
           notes: item.notes,
         }
       : EMPTY,
+  );
+  const [locationMode, setLocationMode] = useState(
+    item?.location &&
+      !LOCATION_OPTIONS.some((location) => location === item.location)
+      ? CUSTOM_LOCATION
+      : item?.location || '',
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -183,6 +198,57 @@ function InventoryEditor({
               </datalist>
             </label>
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label
+              htmlFor="inventory-serial"
+              className="grid gap-2 text-sm font-semibold"
+            >
+              Serial Number (SN)
+              <Input
+                id="inventory-serial"
+                value={form.serialNumber}
+                onChange={(event) =>
+                  setForm({ ...form, serialNumber: event.target.value })
+                }
+                maxLength={100}
+                placeholder="អាចទុកទទេ ប្រសិនបើគ្មាន SN"
+              />
+            </label>
+            <label
+              htmlFor="inventory-acquired-date"
+              className="grid gap-2 text-sm font-semibold"
+            >
+              ថ្ងៃទិញ / ទទួល
+              <Input
+                id="inventory-acquired-date"
+                type="date"
+                value={form.acquiredDate}
+                onChange={(event) =>
+                  setForm({ ...form, acquiredDate: event.target.value })
+                }
+              />
+            </label>
+          </div>
+          <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+            ប្រសិនបើសម្ភារៈមួយមាន SN ផ្ទាល់ខ្លួន គួរបង្កើតជា Item មួយ និងដាក់ចំនួនសរុប 1។
+            សម្ភារៈជាក្រុមអាចទុក SN ឱ្យទទេ។
+          </p>
+          <label
+            htmlFor="inventory-specification"
+            className="grid gap-2 text-sm font-semibold"
+          >
+            Specification
+            <Textarea
+              id="inventory-specification"
+              value={form.specification}
+              onChange={(event) =>
+                setForm({ ...form, specification: event.target.value })
+              }
+              maxLength={1000}
+              rows={3}
+              placeholder="ឧ. Brand, Model, ទំហំ, Port ឬលក្ខណៈបច្ចេកទេស"
+            />
+          </label>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <label
               htmlFor="inventory-total"
@@ -255,21 +321,49 @@ function InventoryEditor({
             ចំនួនទំនេរ៖ {available}
           </output>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label
-              htmlFor="inventory-location"
-              className="grid gap-2 text-sm font-semibold"
-            >
-              ទីតាំងរក្សាទុក
-              <Input
+            <div className="grid gap-2">
+              <label
+                htmlFor="inventory-location"
+                className="text-sm font-semibold"
+              >
+                ទីតាំងរក្សាទុក
+              </label>
+              <NativeSelect
                 id="inventory-location"
-                value={form.location}
-                onChange={(event) =>
-                  setForm({ ...form, location: event.target.value })
-                }
-                maxLength={100}
-                placeholder="ឧ. ទូសម្ភារៈ បន្ទប់រដ្ឋបាល"
-              />
-            </label>
+                value={locationMode}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setLocationMode(value);
+                  setForm({
+                    ...form,
+                    location: value === CUSTOM_LOCATION ? '' : value,
+                  });
+                }}
+                required
+              >
+                <NativeSelectOption value="">ជ្រើសទីតាំង</NativeSelectOption>
+                {LOCATION_OPTIONS.map((location) => (
+                  <NativeSelectOption key={location} value={location}>
+                    {location}
+                  </NativeSelectOption>
+                ))}
+                <NativeSelectOption value={CUSTOM_LOCATION}>
+                  ផ្សេងៗ (បំពេញដោយខ្លួនឯង)
+                </NativeSelectOption>
+              </NativeSelect>
+              {locationMode === CUSTOM_LOCATION && (
+                <Input
+                  aria-label="បញ្ចូលទីតាំងផ្សេងៗ"
+                  value={form.location}
+                  onChange={(event) =>
+                    setForm({ ...form, location: event.target.value })
+                  }
+                  required
+                  maxLength={100}
+                  placeholder="បញ្ចូលឈ្មោះទីតាំង"
+                />
+              )}
+            </div>
             <label
               htmlFor="inventory-active"
               className="grid gap-2 text-sm font-semibold"
@@ -364,7 +458,7 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
     () =>
       items.filter((item) => {
         const matchesQuery =
-          `${item.itemId} ${item.name} ${item.category} ${item.location}`
+          `${item.itemId} ${item.name} ${item.category} ${item.serialNumber} ${item.specification} ${item.location}`
             .toLowerCase()
             .includes(query.trim().toLowerCase());
         const available = availableInventory(item);
@@ -520,9 +614,18 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
                   <p className="mt-1 text-xs text-slate-500">
                     {item.itemId} · {item.category}
                   </p>
+                  <p className="mt-2 text-xs text-slate-600">
+                    🔖 {item.serialNumber || 'គ្មាន SN'} · 📅{' '}
+                    {item.acquiredDate || 'មិនទាន់កំណត់ថ្ងៃ'}
+                  </p>
                   <p className="mt-2 text-sm">
                     📍 {item.location || 'មិនទាន់កំណត់ទីតាំង'}
                   </p>
+                  {item.specification && (
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      ⚙️ {item.specification}
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-4 gap-2 text-center text-xs">
                   <div className="rounded-lg bg-slate-50 p-2">
