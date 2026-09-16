@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   availableInventory,
   parseInventoryInput,
+  type InventoryCondition,
   type InventoryInput,
   type InventoryItem,
 } from '@/lib/inventory';
@@ -30,10 +31,15 @@ import { Modal } from './modal';
 const EMPTY: InventoryInput = {
   name: '',
   category: '',
+  brand: '',
+  model: '',
   serialNumber: '',
   acquiredDate: '',
+  warrantyExpiry: '',
+  condition: 'good',
+  responsiblePerson: '',
   specification: '',
-  totalQty: 0,
+  totalQty: 1,
   reservedQty: 0,
   inUseQty: 0,
   damagedQty: 0,
@@ -50,10 +56,28 @@ const SUGGESTED_CATEGORIES = [
 ];
 const LOCATION_OPTIONS = [...ROOMS, 'បន្ទប់សម្ភារៈ I.T'] as const;
 const CUSTOM_LOCATION = '__custom__';
+const CONDITION_LABELS: Record<InventoryCondition, string> = {
+  new: '✨ ថ្មី',
+  good: '✅ ល្អ',
+  repair: '🛠️ ត្រូវជួសជុល',
+  damaged: '⛔ ខូច',
+};
+
+function FieldRequirement({ required = false }: { required?: boolean }) {
+  return (
+    <small className={required ? 'text-red-600' : 'font-normal text-slate-500'}>
+      {required ? '* ចាំបាច់' : '(មិនចាំបាច់)'}
+    </small>
+  );
+}
 
 function ItemStatus({ item }: { item: InventoryItem }) {
   const available = availableInventory(item);
   if (!item.active) return <Badge variant="secondary">⛔ បានបិទ</Badge>;
+  if (item.condition === 'damaged')
+    return <Badge variant="destructive">⛔ ខូច</Badge>;
+  if (item.condition === 'repair')
+    return <Badge className="bg-amber-100 text-amber-900">🛠️ ត្រូវជួសជុល</Badge>;
   if (!item.totalQty || !available)
     return <Badge variant="destructive">អស់ពីស្តុក</Badge>;
   if (item.damagedQty)
@@ -75,8 +99,13 @@ function InventoryEditor({
       ? {
           name: item.name,
           category: item.category,
+          brand: item.brand,
+          model: item.model,
           serialNumber: item.serialNumber,
           acquiredDate: item.acquiredDate,
+          warrantyExpiry: item.warrantyExpiry,
+          condition: item.condition,
+          responsiblePerson: item.responsiblePerson,
           specification: item.specification,
           totalQty: item.totalQty,
           reservedQty: item.reservedQty,
@@ -156,12 +185,22 @@ function InventoryEditor({
               លេខសម្គាល់ខ្លីដូចជា EQ-001 នឹងត្រូវបង្កើតដោយស្វ័យប្រវត្តិ។
             </p>
           )}
+          <p className="text-xs leading-5 text-slate-600">
+            Field ដែលមាន{' '}
+            <span className="font-semibold text-red-600">* ចាំបាច់</span> ត្រូវបំពេញ។
+            Field ផ្សេងអាចទុកទទេបាន។
+          </p>
+          <h3 className="border-b pb-2 font-bold text-emerald-900">
+            1. ព័ត៌មានសម្ភារៈ
+          </h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <label
               htmlFor="inventory-name"
               className="grid gap-2 text-sm font-semibold"
             >
-              ឈ្មោះសម្ភារៈ
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                ឈ្មោះសម្ភារៈ <FieldRequirement required />
+              </span>
               <Input
                 id="inventory-name"
                 value={form.name}
@@ -177,7 +216,9 @@ function InventoryEditor({
               htmlFor="inventory-category"
               className="grid gap-2 text-sm font-semibold"
             >
-              ប្រភេទ
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                ប្រភេទ <FieldRequirement required />
+              </span>
               <Input
                 id="inventory-category"
                 list="inventory-categories"
@@ -200,16 +241,59 @@ function InventoryEditor({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <label
+              htmlFor="inventory-brand"
+              className="grid gap-2 text-sm font-semibold"
+            >
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                Brand <FieldRequirement />
+              </span>
+              <Input
+                id="inventory-brand"
+                value={form.brand}
+                onChange={(event) =>
+                  setForm({ ...form, brand: event.target.value })
+                }
+                maxLength={80}
+                placeholder="ឧ. Dell, Epson, Logitech"
+              />
+            </label>
+            <label
+              htmlFor="inventory-model"
+              className="grid gap-2 text-sm font-semibold"
+            >
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                Model <FieldRequirement />
+              </span>
+              <Input
+                id="inventory-model"
+                value={form.model}
+                onChange={(event) =>
+                  setForm({ ...form, model: event.target.value })
+                }
+                maxLength={100}
+                placeholder="ឧ. Latitude 5540"
+              />
+            </label>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label
               htmlFor="inventory-serial"
               className="grid gap-2 text-sm font-semibold"
             >
-              Serial Number (SN)
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                Serial Number (SN) <FieldRequirement />
+              </span>
               <Input
                 id="inventory-serial"
                 value={form.serialNumber}
-                onChange={(event) =>
-                  setForm({ ...form, serialNumber: event.target.value })
-                }
+                onChange={(event) => {
+                  const serialNumber = event.target.value;
+                  setForm((current) => ({
+                    ...current,
+                    serialNumber,
+                    totalQty: serialNumber.trim() ? 1 : current.totalQty,
+                  }));
+                }}
                 maxLength={100}
                 placeholder="អាចទុកទទេ ប្រសិនបើគ្មាន SN"
               />
@@ -218,7 +302,9 @@ function InventoryEditor({
               htmlFor="inventory-acquired-date"
               className="grid gap-2 text-sm font-semibold"
             >
-              ថ្ងៃទិញ / ទទួល
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                ថ្ងៃទិញ / ទទួល <FieldRequirement />
+              </span>
               <Input
                 id="inventory-acquired-date"
                 type="date"
@@ -226,6 +312,42 @@ function InventoryEditor({
                 onChange={(event) =>
                   setForm({ ...form, acquiredDate: event.target.value })
                 }
+              />
+            </label>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label
+              htmlFor="inventory-warranty"
+              className="grid gap-2 text-sm font-semibold"
+            >
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                ថ្ងៃផុតការធានា <FieldRequirement />
+              </span>
+              <Input
+                id="inventory-warranty"
+                type="date"
+                min={form.acquiredDate || undefined}
+                value={form.warrantyExpiry}
+                onChange={(event) =>
+                  setForm({ ...form, warrantyExpiry: event.target.value })
+                }
+              />
+            </label>
+            <label
+              htmlFor="inventory-responsible"
+              className="grid gap-2 text-sm font-semibold"
+            >
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                អ្នកទទួលខុសត្រូវ / ផ្នែក <FieldRequirement />
+              </span>
+              <Input
+                id="inventory-responsible"
+                value={form.responsiblePerson}
+                onChange={(event) =>
+                  setForm({ ...form, responsiblePerson: event.target.value })
+                }
+                maxLength={120}
+                placeholder="ឧ. ផ្នែកព័ត៌មានវិទ្យា"
               />
             </label>
           </div>
@@ -237,7 +359,9 @@ function InventoryEditor({
             htmlFor="inventory-specification"
             className="grid gap-2 text-sm font-semibold"
           >
-            Specification
+            <span className="flex flex-wrap items-center justify-between gap-2">
+              Specification <FieldRequirement />
+            </span>
             <Textarea
               id="inventory-specification"
               value={form.specification}
@@ -246,21 +370,27 @@ function InventoryEditor({
               }
               maxLength={1000}
               rows={3}
-              placeholder="ឧ. Brand, Model, ទំហំ, Port ឬលក្ខណៈបច្ចេកទេស"
+              placeholder="ឧ. CPU, RAM, SSD, ទំហំ, Port ឬលក្ខណៈបច្ចេកទេស"
             />
           </label>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <h3 className="border-b pb-2 font-bold text-emerald-900">
+            2. ចំនួន Stock
+          </h3>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <label
               htmlFor="inventory-total"
               className="grid gap-2 text-sm font-semibold"
             >
-              ចំនួនសរុប
+              <span className="flex flex-wrap items-center justify-between gap-1">
+                ចំនួនសរុប <FieldRequirement required />
+              </span>
               <Input
                 id="inventory-total"
                 type="number"
-                min="0"
+                min="1"
                 max="9999"
                 value={form.totalQty}
+                disabled={Boolean(form.serialNumber.trim())}
                 onChange={(event) =>
                   setQuantity('totalQty', event.target.value)
                 }
@@ -320,13 +450,21 @@ function InventoryEditor({
           >
             ចំនួនទំនេរ៖ {available}
           </output>
-          <div className="grid gap-4 sm:grid-cols-2">
+          {form.serialNumber.trim() && (
+            <p className="text-xs text-blue-700">
+              🔖 មាន SN៖ ប្រព័ន្ធកំណត់ចំនួនសរុបជា 1 ដោយស្វ័យប្រវត្តិ។
+            </p>
+          )}
+          <h3 className="border-b pb-2 font-bold text-emerald-900">
+            3. ទីតាំង និងស្ថានភាព
+          </h3>
+          <div className="grid gap-4 lg:grid-cols-3">
             <div className="grid gap-2">
               <label
                 htmlFor="inventory-location"
                 className="text-sm font-semibold"
               >
-                ទីតាំងរក្សាទុក
+                ទីតាំងរក្សាទុក <FieldRequirement required />
               </label>
               <NativeSelect
                 id="inventory-location"
@@ -365,10 +503,35 @@ function InventoryEditor({
               )}
             </div>
             <label
+              htmlFor="inventory-condition"
+              className="grid gap-2 text-sm font-semibold"
+            >
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                ស្ថានភាពសម្ភារៈ <FieldRequirement required />
+              </span>
+              <NativeSelect
+                id="inventory-condition"
+                value={form.condition}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    condition: event.target.value as InventoryCondition,
+                  })
+                }
+                required
+              >
+                {Object.entries(CONDITION_LABELS).map(([value, label]) => (
+                  <NativeSelectOption key={value} value={value}>
+                    {label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </label>
+            <label
               htmlFor="inventory-active"
               className="grid gap-2 text-sm font-semibold"
             >
-              ស្ថានភាព
+              ស្ថានភាពក្នុងប្រព័ន្ធ
               <NativeSelect
                 id="inventory-active"
                 value={form.active ? 'active' : 'inactive'}
@@ -389,7 +552,9 @@ function InventoryEditor({
             htmlFor="inventory-notes"
             className="grid gap-2 text-sm font-semibold"
           >
-            កំណត់ចំណាំ
+            <span className="flex flex-wrap items-center justify-between gap-2">
+              កំណត់ចំណាំ <FieldRequirement />
+            </span>
             <Textarea
               id="inventory-notes"
               value={form.notes}
@@ -452,13 +617,22 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
     total: active.reduce((sum, item) => sum + item.totalQty, 0),
     available: active.reduce((sum, item) => sum + availableInventory(item), 0),
     reserved: active.reduce((sum, item) => sum + item.reservedQty, 0),
-    attention: active.reduce((sum, item) => sum + item.damagedQty, 0),
+    attention: active.reduce(
+      (sum, item) =>
+        sum +
+        item.damagedQty +
+        ((item.condition === 'repair' || item.condition === 'damaged') &&
+        item.damagedQty === 0
+          ? 1
+          : 0),
+      0,
+    ),
   };
   const visible = useMemo(
     () =>
       items.filter((item) => {
         const matchesQuery =
-          `${item.itemId} ${item.name} ${item.category} ${item.serialNumber} ${item.specification} ${item.location}`
+          `${item.itemId} ${item.name} ${item.category} ${item.brand} ${item.model} ${item.serialNumber} ${item.specification} ${item.responsiblePerson} ${item.location}`
             .toLowerCase()
             .includes(query.trim().toLowerCase());
         const available = availableInventory(item);
@@ -468,7 +642,10 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
           (status === 'inactive' && !item.active) ||
           (status === 'attention' &&
             item.active &&
-            (item.damagedQty > 0 || available === 0));
+            (item.damagedQty > 0 ||
+              available === 0 ||
+              item.condition === 'repair' ||
+              item.condition === 'damaged'));
         return matchesQuery && matchesStatus;
       }),
     [items, query, status],
@@ -614,13 +791,29 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
                   <p className="mt-1 text-xs text-slate-500">
                     {item.itemId} · {item.category}
                   </p>
+                  {(item.brand || item.model) && (
+                    <p className="mt-2 text-xs font-medium text-slate-700">
+                      {item.brand} {item.model}
+                    </p>
+                  )}
                   <p className="mt-2 text-xs text-slate-600">
                     🔖 {item.serialNumber || 'គ្មាន SN'} · 📅{' '}
                     {item.acquiredDate || 'មិនទាន់កំណត់ថ្ងៃ'}
                   </p>
+                  <p className="mt-2 text-xs text-slate-600">
+                    {CONDITION_LABELS[item.condition]}
+                    {item.warrantyExpiry
+                      ? ` · 🛡️ ធានាដល់ ${item.warrantyExpiry}`
+                      : ''}
+                  </p>
                   <p className="mt-2 text-sm">
                     📍 {item.location || 'មិនទាន់កំណត់ទីតាំង'}
                   </p>
+                  {item.responsiblePerson && (
+                    <p className="mt-2 text-xs text-slate-600">
+                      👤 {item.responsiblePerson}
+                    </p>
+                  )}
                   {item.specification && (
                     <p className="mt-2 text-xs leading-5 text-slate-500">
                       ⚙️ {item.specification}

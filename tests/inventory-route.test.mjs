@@ -26,7 +26,7 @@ const route = url(compile('app/api/admin/inventory/route.ts')
 const inventory = await import(route);
 const userState = (await import(users)).state;
 const storeState = (await import(inventoryStore)).state;
-const input = { name: 'Projector', category: 'Display', serialNumber: 'PJ-001', acquiredDate: '2026-09-16', specification: '4K, HDMI', totalQty: 2, reservedQty: 0, inUseQty: 0, damagedQty: 0, location: 'Office', active: true, notes: '' };
+const input = { name: 'Projector', category: 'Display', brand: 'Epson', model: 'EB-X51', serialNumber: 'PJ-001', acquiredDate: '2026-09-16', warrantyExpiry: '2029-09-16', condition: 'good', responsiblePerson: 'I.T', specification: '4K, HDMI', totalQty: 1, reservedQty: 0, inUseQty: 0, damagedQty: 0, location: 'Office', active: true, notes: '' };
 const request = (method = 'GET', origin = 'https://example.com') => new Request('https://example.com/api/admin/inventory', {
   method, headers: { Origin: origin, 'Content-Type': 'application/json' }, ...(method === 'GET' ? {} : { body: JSON.stringify(input) }),
 });

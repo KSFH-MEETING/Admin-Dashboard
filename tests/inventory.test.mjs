@@ -10,8 +10,13 @@ import {
 const valid = {
   name: 'Projector',
   category: 'ការបង្ហាញ',
-  serialNumber: 'PJ-001',
+  brand: 'Epson',
+  model: 'EB-X51',
+  serialNumber: '',
   acquiredDate: '2026-09-16',
+  warrantyExpiry: '2029-09-16',
+  condition: 'good',
+  responsiblePerson: 'I.T',
   specification: '4K, HDMI',
   totalQty: 5,
   reservedQty: 1,
@@ -32,10 +37,24 @@ test('small-stock quantities stay consistent and availability is derived', () =>
     { inUseQty: 2.5 },
     { name: '' },
     { acquiredDate: '2026-02-31' },
+    { warrantyExpiry: '2025-01-01' },
+    { condition: 'unknown' },
     { location: '' },
+    { serialNumber: 'PJ-001', totalQty: 2 },
   ]) {
     assert.throws(() => parseInventoryInput({ ...valid, ...change }));
   }
+  assert.equal(
+    parseInventoryInput({
+      ...valid,
+      serialNumber: 'PJ-001',
+      totalQty: 1,
+      reservedQty: 0,
+      inUseQty: 0,
+      damagedQty: 0,
+    }).totalQty,
+    1,
+  );
 });
 
 test('short equipment IDs increment and the latest valid audit row wins', () => {
@@ -82,13 +101,33 @@ test('short equipment IDs increment and the latest valid audit row wins', () => 
       'invalid',
       'owner',
     ],
+    [
+      'EQ-003',
+      'Legacy item',
+      'Other',
+      0,
+      0,
+      0,
+      0,
+      'Office',
+      true,
+      '',
+      'legacy',
+      'owner',
+    ],
   ];
   const items = inventoryFromRows(rows);
-  assert.equal(items.length, 1);
+  assert.equal(items.length, 2);
   assert.equal(items[0].name, 'Projector HD');
   assert.equal(items[0].reservedQty, 1);
   assert.equal(items[0].serialNumber, '');
   assert.equal(items[0].acquiredDate, '');
   assert.equal(items[0].specification, '');
-  assert.equal(nextInventoryId(items), 'EQ-002');
+  assert.equal(items[0].brand, '');
+  assert.equal(items[0].model, '');
+  assert.equal(items[0].condition, 'good');
+  assert.equal(items[0].warrantyExpiry, '');
+  assert.equal(items[0].responsiblePerson, '');
+  assert.equal(items[1].totalQty, 1);
+  assert.equal(nextInventoryId(items), 'EQ-004');
 });
