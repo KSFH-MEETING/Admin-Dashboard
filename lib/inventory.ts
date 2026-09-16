@@ -15,10 +15,25 @@ export type InventoryItem = {
   inUseQty: number;
   damagedQty: number;
   location: string;
+  allocations: InventoryAllocation[];
   active: boolean;
   notes: string;
   updatedAt: string;
   updatedBy: string;
+};
+
+export const INVENTORY_ALLOCATION_STATUSES = [
+  'available',
+  'reserved',
+  'in_use',
+  'damaged',
+] as const;
+export type InventoryAllocationStatus =
+  (typeof INVENTORY_ALLOCATION_STATUSES)[number];
+export type InventoryAllocation = {
+  location: string;
+  status: InventoryAllocationStatus;
+  quantity: number;
 };
 
 export const INVENTORY_CONDITIONS = [
@@ -64,6 +79,67 @@ function optionalDate(value: unknown, label: string) {
   return result;
 }
 
+function legacyAllocations(
+  location: string,
+  totalQty: number,
+  reservedQty: number,
+  inUseQty: number,
+  damagedQty: number,
+) {
+  const result: InventoryAllocation[] = [];
+  const available = totalQty - reservedQty - inUseQty - damagedQty;
+  if (available) result.push({ location, status: 'available', quantity: available });
+  if (reservedQty) result.push({ location, status: 'reserved', quantity: reservedQty });
+  if (inUseQty) result.push({ location, status: 'in_use', quantity: inUseQty });
+  if (damagedQty) result.push({ location, status: 'damaged', quantity: damagedQty });
+  return result;
+}
+
+function parseAllocations(
+  value: unknown,
+  legacy: {
+    location: string;
+    totalQty: number;
+    reservedQty: number;
+    inUseQty: number;
+    damagedQty: number;
+  },
+) {
+  if (!Array.isArray(value) || value.length === 0) {
+    if (!legacy.location) throw new Error('សូមជ្រើស ឬបញ្ចូលទីតាំងរក្សាទុក');
+    return legacyAllocations(
+      legacy.location,
+      legacy.totalQty,
+      legacy.reservedQty,
+      legacy.inUseQty,
+      legacy.damagedQty,
+    );
+  }
+  if (value.length > 100) throw new Error('ការចែកចាយមិនអាចលើស 100 ជួរ');
+  const merged = new Map<string, InventoryAllocation>();
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') throw new Error('ព័ត៌មានចែកចាយមិនត្រឹមត្រូវ');
+    const row = raw as Record<string, unknown>;
+    const location = text(row.location, 100);
+    const status = text(row.status, 20) as InventoryAllocationStatus;
+    const rowQuantity = quantity(row.quantity, 'ចំនួនតាមទីតាំង', 1);
+    if (!location) throw new Error('សូមជ្រើស ឬបញ្ចូលទីតាំងគ្រប់ជួរ');
+    if (!INVENTORY_ALLOCATION_STATUSES.includes(status))
+      throw new Error('ស្ថានភាពចែកចាយមិនត្រឹមត្រូវ');
+    const key = `${location}\u0000${status}`;
+    const existing = merged.get(key);
+    merged.set(key, {
+      location,
+      status,
+      quantity: (existing?.quantity || 0) + rowQuantity,
+    });
+  }
+  const allocations = [...merged.values()];
+  if (allocations.reduce((sum, row) => sum + row.quantity, 0) !== legacy.totalQty)
+    throw new Error('ផលបូកចំនួនតាមទីតាំង និងស្ថានភាព ត្រូវស្មើចំនួនសរុប');
+  return allocations;
+}
+
 export function parseInventoryInput(value: unknown): InventoryInput {
   if (!value || typeof value !== 'object') throw new Error('សូមបំពេញព័ត៌មានសម្ភារៈ');
   const data = value as Record<string, unknown>;
@@ -77,7 +153,7 @@ export function parseInventoryInput(value: unknown): InventoryInput {
   const condition = text(data.condition, 20) as InventoryCondition;
   const responsiblePerson = text(data.responsiblePerson, 120);
   const specification = text(data.specification, 1000);
-  const location = text(data.location, 100);
+  const legacyLocation = text(data.location, 100);
   const notes = text(data.notes, 500);
   const totalQty = quantity(data.totalQty, 'ចំនួនសរុប', 1);
   const reservedQty = quantity(data.reservedQty, 'ចំនួនបានកក់');
@@ -85,7 +161,6 @@ export function parseInventoryInput(value: unknown): InventoryInput {
   const damagedQty = quantity(data.damagedQty, 'ចំនួនខូច');
   if (!name) throw new Error('សូមបញ្ចូលឈ្មោះសម្ភារៈ');
   if (!category) throw new Error('សូមបញ្ចូលប្រភេទសម្ភារៈ');
-  if (!location) throw new Error('សូមជ្រើស ឬបញ្ចូលទីតាំងរក្សាទុក');
   if (!INVENTORY_CONDITIONS.includes(condition))
     throw new Error('សូមជ្រើសស្ថានភាពរបស់សម្ភារៈ');
   if (serialNumber && totalQty !== 1)
@@ -95,6 +170,24 @@ export function parseInventoryInput(value: unknown): InventoryInput {
   if (typeof data.active !== 'boolean') throw new Error('ស្ថានភាពសម្ភារៈមិនត្រឹមត្រូវ');
   if (reservedQty + inUseQty + damagedQty > totalQty)
     throw new Error('ចំនួនបានកក់ កំពុងប្រើ និងខូច មិនអាចលើសចំនួនសរុប');
+  const allocations = parseAllocations(data.allocations, {
+    location: legacyLocation,
+    totalQty,
+    reservedQty,
+    inUseQty,
+    damagedQty,
+  });
+  const derivedReserved = allocations
+    .filter((row) => row.status === 'reserved')
+    .reduce((sum, row) => sum + row.quantity, 0);
+  const derivedInUse = allocations
+    .filter((row) => row.status === 'in_use')
+    .reduce((sum, row) => sum + row.quantity, 0);
+  const derivedDamaged = allocations
+    .filter((row) => row.status === 'damaged')
+    .reduce((sum, row) => sum + row.quantity, 0);
+  const uniqueLocations = [...new Set(allocations.map((row) => row.location))];
+  const location = uniqueLocations.length === 1 ? uniqueLocations[0] : 'ច្រើនទីតាំង';
   return {
     name,
     category,
@@ -107,10 +200,11 @@ export function parseInventoryInput(value: unknown): InventoryInput {
     responsiblePerson,
     specification,
     totalQty,
-    reservedQty,
-    inUseQty,
-    damagedQty,
+    reservedQty: derivedReserved,
+    inUseQty: derivedInUse,
+    damagedQty: derivedDamaged,
     location,
+    allocations,
     active: data.active,
     notes,
   };
@@ -155,6 +249,10 @@ export function inventoryFromRows(rows: unknown[][]): InventoryItem[] {
         condition: row[17] || 'good',
         warrantyExpiry: row[18],
         responsiblePerson: row[19],
+        allocations: (() => {
+          if (typeof row[20] !== 'string' || !row[20].trim()) return undefined;
+          try { return JSON.parse(row[20]); } catch { return undefined; }
+        })(),
       });
       items.set(itemId, {
         itemId,

@@ -30,6 +30,7 @@ const HEADERS = [
   'Condition',
   'Warranty Expiry',
   'Responsible Person / Department',
+  'Distribution',
 ];
 const api = () =>
   `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(requiredEnv('GOOGLE_SHEET_ID'))}`;
@@ -92,7 +93,7 @@ async function initializeInventory() {
     }
   }
   await googleFetch(
-    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A1:T1`)}?valueInputOption=RAW`,
+    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A1:U1`)}?valueInputOption=RAW`,
     {
       method: 'PUT',
       body: JSON.stringify({ values: [HEADERS] }),
@@ -111,7 +112,7 @@ async function ensureInventory() {
 export async function listInventoryItems() {
   await ensureInventory();
   const response = await googleFetch(
-    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A2:T`)}`,
+    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A2:U`)}`,
   );
   const data = (await response.json()) as { values?: unknown[][] };
   return inventoryFromRows(data.values || []).sort(
@@ -154,7 +155,7 @@ export async function saveInventoryItem(
     updatedBy: actor,
   };
   await googleFetch(
-    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A:T`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    `${api()}/values/${encodeURIComponent(`'${INVENTORY_SHEET}'!A:U`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: 'POST',
       body: JSON.stringify({
@@ -180,6 +181,7 @@ export async function saveInventoryItem(
             item.condition,
             item.warrantyExpiry,
             item.responsiblePerson,
+            JSON.stringify(item.allocations),
           ],
         ],
       }),

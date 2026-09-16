@@ -30,7 +30,7 @@ async function save(request: Request, create: boolean) {
     if (!request.headers.get('content-type')?.startsWith('application/json'))
       throw new AuthError('Invalid request', 400);
     const body = await request.text();
-    if (body.length > 5000) throw new AuthError('Request too large', 413);
+    if (body.length > 20000) throw new AuthError('Request too large', 413);
     const item = await saveInventoryItem(JSON.parse(body), actor.email, create);
     return Response.json({ item }, { status: create ? 201 : 200, headers });
   } catch (error) {

@@ -23,6 +23,12 @@ const valid = {
   inUseQty: 1,
   damagedQty: 1,
   location: 'Office',
+  allocations: [
+    { location: 'Office', status: 'available', quantity: 2 },
+    { location: 'Office', status: 'reserved', quantity: 1 },
+    { location: 'Office', status: 'in_use', quantity: 1 },
+    { location: 'Office', status: 'damaged', quantity: 1 },
+  ],
   active: true,
   notes: '',
 };
@@ -39,7 +45,7 @@ test('small-stock quantities stay consistent and availability is derived', () =>
     { acquiredDate: '2026-02-31' },
     { warrantyExpiry: '2025-01-01' },
     { condition: 'unknown' },
-    { location: '' },
+    { allocations: [{ location: '', status: 'available', quantity: 5 }] },
     { serialNumber: 'PJ-001', totalQty: 2 },
   ]) {
     assert.throws(() => parseInventoryInput({ ...valid, ...change }));
@@ -52,9 +58,32 @@ test('small-stock quantities stay consistent and availability is derived', () =>
       reservedQty: 0,
       inUseQty: 0,
       damagedQty: 0,
+      allocations: [{ location: 'Office', status: 'available', quantity: 1 }],
     }).totalQty,
     1,
   );
+});
+
+test('stock can be distributed across locations and statuses', () => {
+  const parsed = parseInventoryInput({
+    ...valid,
+    totalQty: 4,
+    reservedQty: 0,
+    inUseQty: 0,
+    damagedQty: 0,
+    allocations: [
+      { location: 'Room A', status: 'available', quantity: 1 },
+      { location: 'Room B', status: 'reserved', quantity: 1 },
+      { location: 'Room C', status: 'in_use', quantity: 1 },
+      { location: 'Room D', status: 'damaged', quantity: 1 },
+    ],
+  });
+  assert.equal(parsed.location, 'ច្រើនទីតាំង');
+  assert.equal(parsed.reservedQty, 1);
+  assert.equal(parsed.inUseQty, 1);
+  assert.equal(parsed.damagedQty, 1);
+  assert.equal(availableInventory(parsed), 1);
+  assert.throws(() => parseInventoryInput({ ...valid, allocations: [{ location: 'Room A', status: 'available', quantity: 4 }] }));
 });
 
 test('short equipment IDs increment and the latest valid audit row wins', () => {
