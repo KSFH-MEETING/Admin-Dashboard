@@ -865,7 +865,7 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
                     </p>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                <div className="grid grid-cols-4 gap-2 text-center text-xs">
                   <div className="rounded-lg bg-slate-50 p-2">
                     <strong className="block text-base">{item.totalQty}</strong>
                     សរុប
