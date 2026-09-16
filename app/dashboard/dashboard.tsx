@@ -16,7 +16,6 @@ import Link from 'next/link';
 import { CalendarCheck, CalendarDays, Check, ChevronDown, CircleAlert, Clock3, ExternalLink, LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
@@ -198,6 +197,9 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
   const [telegramRetryError, setTelegramRetryError] = useState('');
   const [notice, setNotice] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [managementMenuOpen, setManagementMenuOpen] = useState(false);
+  const dashboardNav = useRef<HTMLElement>(null);
   const allowedViews = allowedDashboardViews(user.role, guest);
   const primaryViews = allowedViews.filter((item) => !managementViews.includes(item));
   const availableManagementViews = allowedViews.filter((item) => managementViews.includes(item));
@@ -207,7 +209,22 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
     window.history.pushState(null, '', `#${nextView}`);
     setView(nextView);
     setNotice('');
+    setMobileMenuOpen(false);
+    setManagementMenuOpen(false);
   }
+
+  useEffect(() => {
+    if (!mobileMenuOpen && !managementMenuOpen) return;
+    function closeMenus(event: PointerEvent | KeyboardEvent) {
+      if (event instanceof KeyboardEvent && event.key !== 'Escape') return;
+      if (event instanceof PointerEvent && dashboardNav.current?.contains(event.target as Node)) return;
+      setMobileMenuOpen(false);
+      setManagementMenuOpen(false);
+    }
+    document.addEventListener('pointerdown', closeMenus);
+    document.addEventListener('keydown', closeMenus);
+    return () => { document.removeEventListener('pointerdown', closeMenus); document.removeEventListener('keydown', closeMenus); };
+  }, [mobileMenuOpen, managementMenuOpen]);
 
   useEffect(() => {
     const navigate = () => {
@@ -338,36 +355,27 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <nav className="sticky top-0 z-30 -mx-4 mb-5 border-b border-slate-200 bg-slate-50/95 px-4 py-3 shadow-sm backdrop-blur print:hidden sm:-mx-6 sm:px-6" aria-label="ផ្នែក Dashboard">
+        <nav ref={dashboardNav} className="sticky top-0 z-30 -mx-4 mb-5 border-b border-slate-200 bg-slate-50/95 px-4 py-3 shadow-sm backdrop-blur print:hidden sm:-mx-6 sm:px-6" aria-label="ផ្នែក Dashboard">
           <div className="flex w-full items-center lg:hidden">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button className="h-11 w-full justify-between px-4 text-left" variant="outline" aria-label="ជ្រើសរើសផ្នែក Dashboard" />}
-              >
+            <div className="relative w-full">
+              <Button className="h-11 w-full justify-between px-4 text-left" variant="outline" aria-label="ជ្រើសរើសផ្នែក Dashboard" aria-haspopup="menu" aria-expanded={mobileMenuOpen} onClick={() => { setMobileMenuOpen((open) => !open); setManagementMenuOpen(false); }}>
                 <span className="truncate">{dashboardLabels[view]}</span>
-                <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" sideOffset={8} className="min-w-[calc(100vw-2rem)] p-2 sm:min-w-[calc(100vw-3rem)]">
-                <DropdownMenuLabel className="px-3 py-2">ផ្នែក Dashboard</DropdownMenuLabel>
-                {allowedViews.map((key) => <DropdownMenuItem key={key} aria-current={view === key ? 'page' : undefined} className="h-11 justify-between px-3" onClick={() => navigateTo(key)}><span>{dashboardLabels[key]}</span>{view === key && <Check className="size-4 text-emerald-700" aria-hidden="true" />}</DropdownMenuItem>)}
-                {!guest && <><DropdownMenuSeparator /><DropdownMenuItem className="h-11 px-3" onClick={() => setCalendarOpen(true)}>🗓️ ប្រតិទិនកក់បន្ទប់</DropdownMenuItem></>}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <ChevronDown className={`size-4 shrink-0 transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </Button>
+              {mobileMenuOpen && <div role="menu" aria-label="ផ្នែក Dashboard" className="absolute left-0 right-0 top-full z-50 mt-2 rounded-xl border bg-white p-2 shadow-xl"><p className="px-3 py-2 text-xs font-medium text-slate-500">ផ្នែក Dashboard</p>{allowedViews.map((key) => <button type="button" role="menuitem" key={key} aria-current={view === key ? 'page' : undefined} className="flex h-11 w-full items-center justify-between rounded-lg px-3 text-left text-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-700" onClick={() => navigateTo(key)}><span>{dashboardLabels[key]}</span>{view === key && <Check className="size-4 text-emerald-700" aria-hidden="true" />}</button>)}{!guest && <><div className="my-1 h-px bg-slate-200" /><button type="button" role="menuitem" className="flex h-11 w-full items-center rounded-lg px-3 text-left text-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-700" onClick={() => { setMobileMenuOpen(false); setCalendarOpen(true); }}>🗓️ ប្រតិទិនកក់បន្ទប់</button></>}</div>}
+            </div>
           </div>
 
           <div className="hidden w-full items-center gap-2 lg:flex">
             {primaryViews.map((key) => <Button className="h-10 shrink-0 px-3" key={key} aria-current={view === key ? 'page' : undefined} variant={view === key ? 'default' : 'outline'} onClick={() => navigateTo(key)}>{dashboardLabels[key]}{view === key && <Check className="ml-1 size-4" aria-hidden="true" />}</Button>)}
             {!guest && <Button className="h-10 shrink-0 px-3" variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>🗓️ ប្រតិទិនកក់បន្ទប់</Button>}
-            {availableManagementViews.length > 0 && <DropdownMenu>
-              <DropdownMenuTrigger render={<Button className="h-10 shrink-0 px-3" variant={managementActive ? 'default' : 'outline'} aria-current={managementActive ? 'page' : undefined} />}>
+            {availableManagementViews.length > 0 && <div className="relative">
+              <Button className="h-10 shrink-0 px-3" variant={managementActive ? 'default' : 'outline'} aria-current={managementActive ? 'page' : undefined} aria-haspopup="menu" aria-expanded={managementMenuOpen} onClick={() => { setManagementMenuOpen((open) => !open); setMobileMenuOpen(false); }}>
                 ⚙️ គ្រប់គ្រង
-                <ChevronDown className="size-4" aria-hidden="true" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={8} className="min-w-64 p-2">
-                <DropdownMenuLabel className="px-3 py-2">មុខងារអ្នកគ្រប់គ្រង</DropdownMenuLabel>
-                {availableManagementViews.map((key) => <DropdownMenuItem key={key} aria-current={view === key ? 'page' : undefined} className="h-11 justify-between px-3" onClick={() => navigateTo(key)}><span>{dashboardLabels[key]}</span>{view === key && <Check className="size-4 text-emerald-700" aria-hidden="true" />}</DropdownMenuItem>)}
-              </DropdownMenuContent>
-            </DropdownMenu>}
+                <ChevronDown className={`size-4 transition-transform ${managementMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </Button>
+              {managementMenuOpen && <div role="menu" aria-label="មុខងារអ្នកគ្រប់គ្រង" className="absolute right-0 top-full z-50 mt-2 min-w-72 rounded-xl border bg-white p-2 text-slate-900 shadow-xl"><p className="px-3 py-2 text-xs font-medium text-slate-500">មុខងារអ្នកគ្រប់គ្រង</p>{availableManagementViews.map((key) => <button type="button" role="menuitem" key={key} aria-current={view === key ? 'page' : undefined} className="flex h-11 w-full items-center justify-between rounded-lg px-3 text-left text-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-700" onClick={() => navigateTo(key)}><span>{dashboardLabels[key]}</span>{view === key && <Check className="size-4 text-emerald-700" aria-hidden="true" />}</button>)}</div>}
+            </div>}
           </div>
         </nav>
         {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
