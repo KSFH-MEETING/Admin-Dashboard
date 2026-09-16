@@ -13,9 +13,10 @@ import { userCan, type DashboardUser } from '@/lib/server/user-policy';
 import { GoogleLogin } from './google-login';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CalendarCheck, CalendarDays, CircleAlert, Clock3, ExternalLink, LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2, UsersRound } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Check, ChevronDown, CircleAlert, Clock3, ExternalLink, LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +25,16 @@ import type { Booking } from '@/lib/server/types';
 import { useWebMcpTool } from '@/lib/use-webmcp';
 
 type ApiList = { bookings?: Booking[]; configured?: boolean; message?: string };
+
+const dashboardLabels: Record<DashboardView, string> = {
+  bookings: '📅 ការកក់',
+  reports: '📊 របាយការណ៍',
+  inventory: '📦 ស្តុកសម្ភារៈ',
+  'calendar-sync': '🔄 សមកាលកម្មប្រតិទិន',
+  users: '👥 អ្នកប្រើ',
+};
+
+const managementViews: DashboardView[] = ['calendar-sync', 'users'];
 
 const statusText: Record<string, string> = {
   PENDING: '⏳ កំពុងដំណើរការ', CALENDAR_CREATED: '📅 បានបង្កើត Calendar', CONFIRMED: '✅ បានបញ្ជាក់', ERROR: '⚠️ មានបញ្ហា', CANCELED: '❌ បានលុបចោល',
@@ -187,12 +198,23 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
   const [telegramRetryError, setTelegramRetryError] = useState('');
   const [notice, setNotice] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const allowedViews = allowedDashboardViews(user.role, guest);
+  const primaryViews = allowedViews.filter((item) => !managementViews.includes(item));
+  const availableManagementViews = allowedViews.filter((item) => managementViews.includes(item));
+  const managementActive = availableManagementViews.includes(view);
+
+  function navigateTo(nextView: DashboardView) {
+    window.history.pushState(null, '', `#${nextView}`);
+    setView(nextView);
+    setNotice('');
+  }
+
   useEffect(() => {
     const navigate = () => {
       setView(resolveDashboardView(window.location.hash, user.role, guest));
     };
-    navigate(); window.addEventListener('hashchange', navigate);
-    return () => window.removeEventListener('hashchange', navigate);
+    navigate(); window.addEventListener('hashchange', navigate); window.addEventListener('popstate', navigate);
+    return () => { window.removeEventListener('hashchange', navigate); window.removeEventListener('popstate', navigate); };
   }, [guest, user.role]);
 
   const load = useCallback(async (throwOnError = false) => {
@@ -316,12 +338,37 @@ function DashboardContent({ user, onSignOut, signingOut, guest = false }: { user
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <nav className="sticky top-0 z-30 -mx-4 mb-5 flex gap-2 overflow-x-auto border-b border-slate-200 bg-slate-50/95 px-4 py-3 shadow-sm backdrop-blur print:hidden sm:-mx-6 sm:px-6" aria-label="ផ្នែក Dashboard">
-          {allowedDashboardViews(user.role, guest).map((key) => {
-            const labels: Record<DashboardView, string> = { bookings: '📅 ការកក់', reports: '📊 របាយការណ៍', 'calendar-sync': '🔄 Calendar Sync', users: '👥 អ្នកប្រើ', inventory: '📦 Inventory' };
-            return <Button className="shrink-0" key={key} aria-current={view === key ? 'page' : undefined} variant={view === key ? 'default' : 'outline'} onClick={() => { window.location.hash = key; setView(key); setNotice(''); }}>{labels[key]}</Button>;
-          })}
-          {!guest && <Button className="shrink-0" variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>📅 ប្រតិទិនកក់បន្ទប់</Button>}
+        <nav className="sticky top-0 z-30 -mx-4 mb-5 border-b border-slate-200 bg-slate-50/95 px-4 py-3 shadow-sm backdrop-blur print:hidden sm:-mx-6 sm:px-6" aria-label="ផ្នែក Dashboard">
+          <div className="flex w-full items-center lg:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button className="h-11 w-full justify-between px-4 text-left" variant="outline" aria-label="ជ្រើសរើសផ្នែក Dashboard" />}
+              >
+                <span className="truncate">{dashboardLabels[view]}</span>
+                <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" sideOffset={8} className="min-w-[calc(100vw-2rem)] p-2 sm:min-w-[calc(100vw-3rem)]">
+                <DropdownMenuLabel className="px-3 py-2">ផ្នែក Dashboard</DropdownMenuLabel>
+                {allowedViews.map((key) => <DropdownMenuItem key={key} aria-current={view === key ? 'page' : undefined} className="h-11 justify-between px-3" onClick={() => navigateTo(key)}><span>{dashboardLabels[key]}</span>{view === key && <Check className="size-4 text-emerald-700" aria-hidden="true" />}</DropdownMenuItem>)}
+                {!guest && <><DropdownMenuSeparator /><DropdownMenuItem className="h-11 px-3" onClick={() => setCalendarOpen(true)}>🗓️ ប្រតិទិនកក់បន្ទប់</DropdownMenuItem></>}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="hidden w-full items-center gap-2 lg:flex">
+            {primaryViews.map((key) => <Button className="h-10 shrink-0 px-3" key={key} aria-current={view === key ? 'page' : undefined} variant={view === key ? 'default' : 'outline'} onClick={() => navigateTo(key)}>{dashboardLabels[key]}{view === key && <Check className="ml-1 size-4" aria-hidden="true" />}</Button>)}
+            {!guest && <Button className="h-10 shrink-0 px-3" variant="outline" aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}>🗓️ ប្រតិទិនកក់បន្ទប់</Button>}
+            {availableManagementViews.length > 0 && <DropdownMenu>
+              <DropdownMenuTrigger render={<Button className="h-10 shrink-0 px-3" variant={managementActive ? 'default' : 'outline'} aria-current={managementActive ? 'page' : undefined} />}>
+                ⚙️ គ្រប់គ្រង
+                <ChevronDown className="size-4" aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={8} className="min-w-64 p-2">
+                <DropdownMenuLabel className="px-3 py-2">មុខងារអ្នកគ្រប់គ្រង</DropdownMenuLabel>
+                {availableManagementViews.map((key) => <DropdownMenuItem key={key} aria-current={view === key ? 'page' : undefined} className="h-11 justify-between px-3" onClick={() => navigateTo(key)}><span>{dashboardLabels[key]}</span>{view === key && <Check className="size-4 text-emerald-700" aria-hidden="true" />}</DropdownMenuItem>)}
+              </DropdownMenuContent>
+            </DropdownMenu>}
+          </div>
         </nav>
         {notice && <output className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</output>}
         {view === 'inventory' ? <InventoryPanel canManage={user.role === 'owner'} /> : view === 'users' && user.role === 'owner' ? <UsersPanel /> : view === 'calendar-sync' && user.role === 'owner' ? <CalendarSyncPanel /> : <>
