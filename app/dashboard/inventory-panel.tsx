@@ -582,6 +582,8 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('active');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -613,6 +615,12 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
   }, [load]);
 
   const active = items.filter((item) => item.active);
+  const categories = [
+    ...new Set(items.map((item) => item.category).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
+  const locations = [
+    ...new Set(items.map((item) => item.location).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
   const summary = {
     total: active.reduce((sum, item) => sum + item.totalQty, 0),
     available: active.reduce((sum, item) => sum + availableInventory(item), 0),
@@ -646,9 +654,15 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
               available === 0 ||
               item.condition === 'repair' ||
               item.condition === 'damaged'));
-        return matchesQuery && matchesStatus;
+        const matchesCategory =
+          categoryFilter === 'all' || item.category === categoryFilter;
+        const matchesLocation =
+          locationFilter === 'all' || item.location === locationFilter;
+        return (
+          matchesQuery && matchesStatus && matchesCategory && matchesLocation
+        );
       }),
-    [items, query, status],
+    [items, query, status, categoryFilter, locationFilter],
   );
 
   function saved(item: InventoryItem, create: boolean) {
@@ -726,7 +740,7 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
         ))}
       </div>
       <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-        <div className="grid gap-3 border-b p-4 sm:grid-cols-[minmax(0,1fr)_190px_auto]">
+        <div className="grid gap-3 border-b p-4 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_170px_170px_190px_auto]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <Input
@@ -737,6 +751,30 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
               placeholder="ស្វែងរក ID ឈ្មោះ ឬទីតាំង…"
             />
           </div>
+          <NativeSelect
+            aria-label="តម្រងប្រភេទសម្ភារៈ"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+          >
+            <NativeSelectOption value="all">គ្រប់ប្រភេទ</NativeSelectOption>
+            {categories.map((category) => (
+              <NativeSelectOption key={category} value={category}>
+                {category}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+          <NativeSelect
+            aria-label="តម្រងទីតាំងសម្ភារៈ"
+            value={locationFilter}
+            onChange={(event) => setLocationFilter(event.target.value)}
+          >
+            <NativeSelectOption value="all">គ្រប់ទីតាំង</NativeSelectOption>
+            {locations.map((location) => (
+              <NativeSelectOption key={location} value={location}>
+                {location}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
           <NativeSelect
             aria-label="តម្រងសម្ភារៈ"
             value={status}
@@ -756,7 +794,9 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
           </Button>
         </div>
         <output className="block border-b bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          បង្ហាញ {visible.length} / {items.length} ប្រភេទសម្ភារៈ
+          បង្ហាញ {visible.length} / {items.length} សម្ភារៈ · ប្រភេទ៖{' '}
+          {categoryFilter === 'all' ? 'ទាំងអស់' : categoryFilter} · ទីតាំង៖{' '}
+          {locationFilter === 'all' ? 'ទាំងអស់' : locationFilter}
         </output>
         {loading ? (
           <div className="p-12 text-center text-sm text-slate-500">
@@ -777,20 +817,28 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
             </p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="grid gap-4 bg-slate-50/60 p-4 sm:grid-cols-2 lg:grid-cols-4">
             {visible.map((item) => (
               <article
                 key={item.itemId}
-                className="grid gap-4 p-4 sm:grid-cols-[minmax(180px,1fr)_minmax(240px,1.4fr)_auto] sm:items-center"
+                className="flex min-w-0 flex-col gap-3 rounded-2xl border bg-white p-4 shadow-sm"
               >
-                <div>
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-bold text-emerald-900">{item.name}</h3>
                     <ItemStatus item={item} />
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {item.itemId} · {item.category}
+                  <p className="mt-1 text-xs font-medium text-slate-500">
+                    {item.itemId}
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-800">
+                      🏷️ {item.category}
+                    </span>
+                    <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-800">
+                      📍 {item.location || 'មិនទាន់កំណត់ទីតាំង'}
+                    </span>
+                  </div>
                   {(item.brand || item.model) && (
                     <p className="mt-2 text-xs font-medium text-slate-700">
                       {item.brand} {item.model}
@@ -806,21 +854,18 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
                       ? ` · 🛡️ ធានាដល់ ${item.warrantyExpiry}`
                       : ''}
                   </p>
-                  <p className="mt-2 text-sm">
-                    📍 {item.location || 'មិនទាន់កំណត់ទីតាំង'}
-                  </p>
                   {item.responsiblePerson && (
                     <p className="mt-2 text-xs text-slate-600">
                       👤 {item.responsiblePerson}
                     </p>
                   )}
                   {item.specification && (
-                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
                       ⚙️ {item.specification}
                     </p>
                   )}
                 </div>
-                <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                <div className="grid grid-cols-2 gap-2 text-center text-xs">
                   <div className="rounded-lg bg-slate-50 p-2">
                     <strong className="block text-base">{item.totalQty}</strong>
                     សរុប
@@ -850,7 +895,11 @@ export function InventoryPanel({ canManage }: { canManage: boolean }) {
                   )}
                 </div>
                 {canManage && (
-                  <Button variant="outline" onClick={() => setEditor(item)}>
+                  <Button
+                    className="mt-auto w-full"
+                    variant="outline"
+                    onClick={() => setEditor(item)}
+                  >
                     <Pencil /> កែប្រែ
                   </Button>
                 )}
